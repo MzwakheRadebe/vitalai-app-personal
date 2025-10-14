@@ -6,9 +6,9 @@ AI-powered chatbot for reducing patient backlogs in South African hospitals thro
 ## 👥 Group Members
 - **Omphile Modiba** - Frontend Developer
 - **⁠Mzwakhe** - Backend orchestrator & API Development
-3. ⁠**Kapia** - AI & NLP specialist
-4. **Sosa** - ⁠Dadabase & Data Engineering
-5. ⁠**Adam** - Infrastructure & Security Engineer
+- ⁠**Kapia** - AI & NLP specialist
+- **Sosa** - ⁠Dadabase & Data Engineering
+- ⁠**Adam** - Infrastructure & Security Engineer
 
 ## 🎯 My Contribution: Frontend Development
 
