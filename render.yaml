@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: Vitalai-chatbot-backend
+    name: VitalAi-chatbot-backend
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -14,6 +14,12 @@ services:
       - key: ALLOWED_ORIGINS
         value: "*"
       - key: MYSQL_URL
-        value: mysql://vitalai_admin:$B1tbyB1t.v1t@l.123@your-rds-endpoint:3306/vitalai_prod
+        value: mysql://vitalai_admin:$B1tbyB1t.v1t@l.12@your-rds-endpoint:3306/vitalai_prod
       - key: MONGO_URL
         value: mongodb+srv://vitalai_admin:B1tbyB1t.v1t@l.123@vitalai-healthcare.lahaumm.mongodb.net/vitalai_analytics
+      - key: AI_SERVICE_URL
+        value: https://person3-ai-service.onrender.com  
+      - key: AI_MODEL
+        value: vitalai-healthcare-model                 
+      - key: AI_API_KEY
+        value: ${AI_SERVICE_KEY}                        
