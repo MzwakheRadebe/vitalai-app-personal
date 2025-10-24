@@ -1,4 +1,4 @@
-# setup_mysql.py
+﻿# setup_mysql.py
 import mysql.connector
 from mysql.connector import Error
 
@@ -11,23 +11,28 @@ def setup_production_database():
             password='B1tbyB1t.v1t@l.123',
             database='vitalai_prod'
         )
-        
+
         if connection.is_connected():
             print("✅ Connected to MySQL database")
-            
+
             cursor = connection.cursor()
-            
+
             # Create all tables
             tables_sql = [
                 """
                 CREATE TABLE IF NOT EXISTS patients (
                     patient_id INT AUTO_INCREMENT PRIMARY KEY,
-                    full_name VARCHAR(100) NOT NULL,
+                    first_name VARCHAR(50) NOT NULL,
+                    last_name VARCHAR(50) NOT NULL,
+                    id_number CHAR(13) UNIQUE,
+                    passport_number CHAR(13) UNIQUE,
+                    file_number CHAR(10) UNIQUE,
                     age INT,
                     gender ENUM('Male','Female','Other'),
-                    contact_number VARBINARY(255),
-                    language_preference VARCHAR(50),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    contact_number VARCHAR(255),
+                    language_preference VARCHAR(50) DEFAULT 'English',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_patient_name (first_name, last_name)
                 )
                 """,
                 """
@@ -43,13 +48,13 @@ def setup_production_database():
                 """,
                 # Add all other tables from your schema...
             ]
-            
+
             for sql in tables_sql:
                 cursor.execute(sql)
-            
+
             connection.commit()
             print("✅ Production database tables created")
-            
+
     except Error as e:
         print(f"❌ Database error: {e}")
     finally:
