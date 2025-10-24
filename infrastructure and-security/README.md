@@ -14,11 +14,12 @@ JWT Authentication for mobile devices
 Rate Limiting (100 requests/hour per device)
 
 POPI Compliance with synthetic data
-Secure Environment Variables in Render
+
 
 AI Integration
-Local AI Service (Person 3's code integrated directly)
+Local AI Service 
 
 No external API dependencies
+
 
 Fallback system when AI is unavailable
