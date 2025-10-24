@@ -1,0 +1,32 @@
+2025-10-23 22:12:38,238 - Use pytorch device_name: cpu
+2025-10-23 22:12:38,239 - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-10-23 22:12:43,204 - Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2025-10-23 22:12:53,217 - Save model to embedder_model
+2025-10-23 22:24:36,901 - Use pytorch device_name: cpu
+2025-10-23 22:24:36,901 - Load pretrained SentenceTransformer: embedder_model
+2025-10-23 22:28:39,498 - Use pytorch device_name: cpu
+2025-10-23 22:28:39,503 - Load pretrained SentenceTransformer: embedder_model
+2025-10-23 22:29:33,170 - Use pytorch device_name: cpu
+2025-10-23 22:29:33,170 - Load pretrained SentenceTransformer: embedder_model
+2025-10-23 22:29:46,931 - Input: i feel weird | Prediction: LOW | Confidence: 0.95
+2025-10-23 22:30:55,704 - Input: i feel like vomitting | Prediction: LOW | Confidence: 0.67
+2025-10-23 22:31:14,331 - Input: i cant feel my legs | Prediction: LOW | Confidence: 0.68
+2025-10-23 22:31:24,974 - Input: i have a nose bleed | Prediction: CRITICAL | Confidence: 0.41
+2025-10-23 22:33:55,236 - Input: i have a headache | Prediction: LOW | Confidence: 0.44
+2025-10-23 22:34:07,894 - Input: i have swelling | Prediction: LOW | Confidence: 0.70
+2025-10-23 22:39:50,975 - Input: i feel like puking | Prediction: LOW | Confidence: 0.63
+2025-10-24 09:13:29,426 - Use pytorch device_name: cpu
+2025-10-24 09:13:29,427 - Load pretrained SentenceTransformer: embedder_model
+2025-10-24 09:13:47,688 - Input: i feel like vommiting | Prediction: MEDIUM | Confidence: 0.59
+2025-10-24 09:14:03,576 - Input: i am nose bleeding | Prediction: CRITICAL | Confidence: 0.41
+2025-10-24 09:30:54,948 - Use pytorch device_name: cpu
+2025-10-24 09:30:54,948 - Load pretrained SentenceTransformer: embedder_model
+2025-10-24 09:36:37,493 - Use pytorch device_name: cpu
+2025-10-24 09:36:37,494 - Load pretrained SentenceTransformer: embedder_model
+2025-10-24 09:38:19,307 - Input: i feel sick | Prediction: LOW | Confidence: 0.82
+2025-10-24 10:12:25,737 - Input: i feell;ike dying | Prediction: CRITICAL | Confidence: 0.73
+2025-10-24 10:12:43,503 - Input: I have a headache | Prediction: LOW | Confidence: 0.44
+2025-10-24 10:12:59,022 - Input: i sneeze alot | Prediction: LOW | Confidence: 0.59
+2025-10-24 10:19:41,284 - Input: i have a headache | Prediction: LOW | Confidence: 0.44
+2025-10-24 11:05:35,653 - Use pytorch device_name: cpu
+2025-10-24 11:05:35,653 - Load pretrained SentenceTransformer: embedder_model

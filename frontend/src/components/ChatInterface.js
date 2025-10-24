@@ -5,6 +5,10 @@ import FileUpload from './FileUpload';
 import AppointmentScheduler from './AppointmentScheduler';
 import './ChatInterface.css';
 
+
+const API_BASE_URL =  "http://localhost:5000";
+
+
 // Main chat interface component for VitalAI
 const ChatInterface = () => {
   // State for chat messages
@@ -55,41 +59,64 @@ const ChatInterface = () => {
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setIsLoading(true);
+    
+    try {
+  // Call FastAPI endpoint
+  const response = await fetch(`${API_BASE_URL}/predict`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: inputText })
+  });
 
-    // Mock AI response logic
-    setTimeout(() => {
-      const responses = {
-        headache: "I understand you're experiencing a headache. How long have you had this pain? Is it mild, moderate, or severe?",
-        fever: "For fever symptoms, please monitor your temperature. Have you taken any medication? What is your current temperature?",
-        appointment: "I can help schedule an appointment. Let me open the appointment scheduler for you.",
-        emergency: "This sounds serious. For emergency situations, please go to your nearest emergency department immediately.",
-        default: "Thank you for sharing. Could you tell me more about your symptoms so I can better assist you?"
-      };
+  if (!response.ok) throw new Error("Failed to fetch AI response");
 
-      let response = responses.default;
-      const input = inputText.toLowerCase();
-      
-      // Simple keyword-based response selection
-      if (input.includes('headache') || input.includes('pain')) response = responses.headache;
-      else if (input.includes('fever') || input.includes('temperature')) response = responses.fever;
-      else if (input.includes('appointment') || input.includes('schedule')) {
-        response = responses.appointment;
-        setTimeout(() => setShowAppointmentScheduler(true), 500); // Show appointment modal
-      }
-      else if (input.includes('emergency') || input.includes('urgent')) response = responses.emergency;
+  const data = await response.json();
 
-      // Add bot response to chat
-      const botMessage = {
-        id: Date.now() + 1,
-        text: response,
-        sender: 'bot',
-        timestamp: new Date(),
-        type: 'text'
-      };
-      
-      setMessages(prev => [...prev, botMessage]);
-      setIsLoading(false);
-    }, 1500);
+  let responseText = "";
+const conf = data.confidence.toFixed(2);
+
+switch (data.predicted_severity.toUpperCase()) {
+  case "LOW":
+    responseText = `🟢 Your condition appears to be *LOW severity*. It’s likely mild, but monitor your symptoms and rest. Consult a doctor if it persists or you're unsure (Confidence: ${conf})`;
+    break;
+  case "MEDIUM":
+    responseText = `🟡 This condition may be of *MODERATE concern*. You should monitor symptoms and consult a doctor. (Confidence: ${conf})`;
+    break;
+  case "HIGH":
+    responseText = `🟠⚠️ Your symptoms suggest a *HIGH severity* condition. Please seek medical advice as soon as possible. (Confidence: ${conf})`;
+    break;
+  case "CRITICAL":
+    responseText = `🔴⚠️ *CRITICAL severity detected.* Please seek *immediate medical attention*. (Confidence: ${conf})`;
+    break;
+  default:
+    responseText = `I couldn’t determine severity confidently. (Confidence: ${conf})`;
+}
+
+  // Format bot message based on response
+  const botMessage = {
+    id: Date.now() + 1,
+    text: responseText,
+    sender: 'bot',
+    timestamp: new Date(),
+    type: 'text'
+  };
+
+  setMessages(prev => [...prev, botMessage]);
+} catch (error) {
+  console.error("Error fetching AI response:", error);
+
+  const botMessage = {
+    id: Date.now() + 1,
+    text: "⚠️ Sorry, I couldn't process that right now. Please try again.",
+    sender: 'bot',
+    timestamp: new Date(),
+    type: 'text'
+  };
+  setMessages(prev => [...prev, botMessage]);
+} finally {
+  setIsLoading(false);
+}
+
   };
 
   // Handle file upload event
