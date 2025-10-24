@@ -1,9 +1,28 @@
-# Default ignored files
-/shelf/
-/workspace.xml
-# Editor-based HTTP Client requests
-/httpRequests/
-# Datasource local storage ignored files
-/dataSources/
-/dataSources.local.xml
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Environment and secrets
+.env
+.env.*
+
+# Local dev database
+local_offline.db
+
+# Test caches
+.pytest_cache/
+
+# IDE/editor (JetBrains)
+shelf/
+workspace.xml
+httpRequests/
+dataSources/
+dataSources.local.xml
+
+# IDE/editor
+.vscode/
+.DS_Store
+
+# Node (if frontend added later)
 node_modules/
