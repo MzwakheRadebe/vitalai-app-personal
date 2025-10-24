@@ -77,19 +77,35 @@ const conf = data.confidence.toFixed(2);
 
 switch (data.predicted_severity.toUpperCase()) {
   case "LOW":
-    responseText = `🟢 Your condition appears to be *LOW severity*. It’s likely mild, but monitor your symptoms and rest. Consult a doctor if it persists or you're unsure (Confidence: ${conf})`;
+    responseText = (
+      <>
+        🟢 Your condition appears to be <strong>LOW Severity</strong>. It’s likely mild — monitor your symptoms and rest. Consult a doctor if it persists or you're unsure.
+      </>
+    );
     break;
   case "MEDIUM":
-    responseText = `🟡 This condition may be of *MODERATE concern*. You should monitor symptoms and consult a doctor. (Confidence: ${conf})`;
+    responseText = (
+      <>
+        🟡 This condition may be of <strong>MODERATE Concern</strong>. You should monitor symptoms and consult a doctor.
+      </>
+    );
     break;
   case "HIGH":
-    responseText = `🟠⚠️ Your symptoms suggest a *HIGH severity* condition. Please seek medical advice as soon as possible. (Confidence: ${conf})`;
+    responseText = (
+      <>
+        🟠⚠️ Your symptoms suggest a <strong>HIGH Severity</strong> condition. Please seek medical advice as soon as possible.
+      </>
+    );
     break;
   case "CRITICAL":
-    responseText = `🔴⚠️ *CRITICAL severity detected.* Please seek *immediate medical attention*. (Confidence: ${conf})`;
+    responseText = (
+      <>
+        🔴⚠️ <strong>CRITICAL Severity</strong> detected. Please seek <strong>immediate medical attention.</strong>
+      </>
+    );
     break;
   default:
-    responseText = `I couldn’t determine severity confidently. (Confidence: ${conf})`;
+    responseText = <>I couldn’t determine severity confidently. Please contact a medical professional.</>;
 }
 
   // Format bot message based on response
