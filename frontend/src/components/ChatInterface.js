@@ -77,16 +77,16 @@ const conf = data.confidence.toFixed(2);
 
 switch (data.predicted_severity.toUpperCase()) {
   case "LOW":
-    responseText = `Your condition appears to be *low severity*. It’s likely mild, but monitor your symptoms and rest. (Confidence: ${conf})`;
+    responseText = `🟢 Your condition appears to be *LOW severity*. It’s likely mild, but monitor your symptoms and rest. Consult a doctor if it persists or you're unsure (Confidence: ${conf})`;
     break;
   case "MEDIUM":
-    responseText = `This condition may be of *moderate concern*. You should monitor symptoms and consult a doctor if needed. (Confidence: ${conf})`;
+    responseText = `🟡 This condition may be of *MODERATE concern*. You should monitor symptoms and consult a doctor. (Confidence: ${conf})`;
     break;
   case "HIGH":
-    responseText = `Your symptoms suggest a *high severity* condition. Please seek medical advice soon. (Confidence: ${conf})`;
+    responseText = `🟠⚠️ Your symptoms suggest a *HIGH severity* condition. Please seek medical advice as soon as possible. (Confidence: ${conf})`;
     break;
   case "CRITICAL":
-    responseText = `⚠️ *Critical severity detected.* Please seek *immediate medical attention*. (Confidence: ${conf})`;
+    responseText = `🔴⚠️ *CRITICAL severity detected.* Please seek *immediate medical attention*. (Confidence: ${conf})`;
     break;
   default:
     responseText = `I couldn’t determine severity confidently. (Confidence: ${conf})`;
