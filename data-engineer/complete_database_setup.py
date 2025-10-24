@@ -1,9 +1,9 @@
-# complete_database_setup.py
+﻿# complete_database_setup.py
 import mysql.connector
 
 def setup_complete_database():
     print("🚀 Setting up complete VitalAI database...")
-    
+
     try:
         conn = mysql.connector.connect(
             host='localhost',
@@ -11,21 +11,28 @@ def setup_complete_database():
             password='REDACTED_PASSWORD',
             database='vitalai_prod'
         )
-        
+
         cursor = conn.cursor()
-        
+
         # Drop and recreate all tables to ensure consistency
         tables_sql = [
             """
             CREATE TABLE IF NOT EXISTS patients (
                 patient_id INT AUTO_INCREMENT PRIMARY KEY,
-                full_name VARCHAR(100) NOT NULL,
+                first_name VARCHAR(50) NOT NULL,
+                last_name VARCHAR(50) NOT NULL,
+                id_number CHAR(13) UNIQUE,
+                passport_number CHAR(13) UNIQUE,
+                file_number CHAR(10) UNIQUE,
                 age INT,
                 gender ENUM('Male','Female','Other'),
                 contact_number VARCHAR(255),
                 language_preference VARCHAR(50) DEFAULT 'English',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_patient_name (full_name)
+                INDEX idx_patient_name (first_name, last_name),
+                INDEX idx_id_number (id_number),
+                INDEX idx_passport (passport_number),
+                INDEX idx_file_number (file_number)
             )
             """,
             """
@@ -67,29 +74,29 @@ def setup_complete_database():
             )
             """
         ]
-        
+
         for sql in tables_sql:
             try:
                 cursor.execute(sql)
                 print("✅ Table created/verified")
             except Exception as e:
                 print(f"⚠️ Table creation note: {e}")
-        
+
         conn.commit()
-        
+
         # Verify all tables exist
         cursor.execute("SHOW TABLES")
         tables = cursor.fetchall()
-        
+
         print(f"\n📊 Database now has {len(tables)} tables:")
         for table in tables:
             print(f"   ✅ {table[0]}")
-        
+
         cursor.close()
         conn.close()
-        
+
         print("\n🎉 VITALAI DATABASE COMPLETELY READY!")
-        
+
     except Exception as e:
         print(f"❌ Database setup failed: {e}")
 
