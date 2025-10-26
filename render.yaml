@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: vitalai-chatbot-backend
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: SQLITE_PATH
+        value: /tmp/local_offline.db
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: AI_SERVICE_URL
+        value: https://api.openai.com/v1
+      - key: AI_MODEL
+        value: gpt-4o-mini
+      - key: AI_API_KEY
+        value: ""
+      - key: MYSQL_URL
+        value: mysql://vitalai_admin:$B1tbyB1t.v1t@l.12@your-rds-endpoint:3306/vitalai_prod
+      - key: MONGO_URL
+        value: mongodb+srv://vitalai_admin:B1tbyB1t.v1t@l.123@vitalai-healthcare.lahaumm.mongodb.net/vitalai_analytics
+      - key: ENV
+        value: production
+                           
+
+
