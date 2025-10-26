@@ -27,7 +27,7 @@ async def chat_with_ai(prompt_data: dict):
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{ai_auth.ai_service_url}/chat",  
+                f"{ai_auth.http://localhost:11434/v1}/chat",  
                 json={"prompt": prompt},
                 headers=ai_auth.get_ai_headers(),
                 timeout=30.0  
@@ -61,11 +61,11 @@ async def chat_with_ai(prompt_data: dict):
 
 @router.get("/api/ai-health")
 async def ai_health_check():
-    """Health check for Person 3's AI service"""
+    """Health check for AI service"""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{ai_auth.ai_service_url}/health",  
+                f"{ai_auth.http://localhost:11434/v1}/health",  
                 headers=ai_auth.get_ai_headers(),
                 timeout=10.0
             )
@@ -80,4 +80,5 @@ async def ai_health_check():
             "ai_service_status": "unreachable",
             "error": str(e),
             "model": ai_auth.ai_model
+
         }
