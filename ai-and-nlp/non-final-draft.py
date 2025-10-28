@@ -130,7 +130,7 @@ async def predict(data: TriageInput):
         logging.error(f"Error processing input: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-# RUN APP
-if __name__ == "__main__":
-    # Run Uvicorn server directly
-    uvicorn.run("non-final-draft:app", host="0.0.0.0", port=10000)
+# # RUN APP
+# if __name__ == "__main__":
+#     # Run Uvicorn server directly
+#     uvicorn.run("non-final-draft:app", host="0.0.0.0", port=10000)
