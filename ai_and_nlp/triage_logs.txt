@@ -58,3 +58,5 @@
 2025-10-28 12:10:25,808 - Load pretrained SentenceTransformer: embedder_model
 2025-10-28 12:56:12,034 - Use pytorch device_name: cpu
 2025-10-28 12:56:12,035 - Load pretrained SentenceTransformer: embedder_model
+2025-10-28 15:56:09,752 - Use pytorch device_name: cpu
+2025-10-28 15:56:09,752 - Load pretrained SentenceTransformer: embedder_model
