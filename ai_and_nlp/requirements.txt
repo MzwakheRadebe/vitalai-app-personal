@@ -62,7 +62,7 @@ tokenizers==0.22.1
 torch==2.9.0
 tqdm==4.67.1
 transformers==4.57.1
-sentence-transformers==5.1.2
+sentence_transformers==5.1.2
 typer==0.20.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
