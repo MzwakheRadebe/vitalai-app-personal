@@ -1,0 +1,54 @@
+# Render Blueprint for backend (free plan + local AI)
+# Owner notes: fill ALLOWED_ORIGINS and create the secrets below
+
+services:
+  - type: web
+    name: vitalai-chatbot-backend
+    env: python
+    plan: free
+    autoDeploy: true
+    region: oregon
+
+    # Build/start
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    # Health check must return 200
+    healthCheckPath: /
+
+    envVars:
+      # Runtime and CORS
+      - key: ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: ""  # TODO: Fill frontend origin(s), comma-separated if multiple (e.g., https://app.example.com)
+
+      # Pin Python version
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+      # Local AI configuration (code must read these vars)
+      - key: USE_LOCAL_AI
+        value: "true"
+      - key: EMBEDDER_MODEL_DIR
+        value: ./ai-and-nlp/embedder_model   # Confirm path if different
+      - key: CLASSIFIER_PATH
+        value: ./ai-and-nlp/severity_classifier.joblib  # Confirm path
+      - key: TRIAGE_CSV
+        value: ./ai-and-nlp/triage2.csv  # Confirm path
+
+      # App secrets (create in Render > Secrets, then reference here)
+      - key: JWT_SECRET
+        fromSecret: jwt-secret  # Create secret with actual value
+      - key: ENCRYPTION_KEY
+        fromSecret: encryption-key  # Create secret with actual value
+
+    # Optional local DB path (demo only; free plan has no persistent disk)
+    # - key: SQLITE_PATH
+    #   value: ./local_offline.db
+
+    # If "/" does not return 200, set alternate endpoint
+    # healthCheckPath: /health
+                           
+
+
