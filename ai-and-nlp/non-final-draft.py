@@ -50,12 +50,8 @@ class TriageInput(BaseModel):
     text: str
 
 # TEXT PREPROCESSING
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    from spacy.cli import download
-    download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
+nlp = spacy.load("en_core_web_sm")
+
 
 def preprocess(text: str) -> str:
     doc = nlp(text.lower())
@@ -137,4 +133,4 @@ async def predict(data: TriageInput):
 # RUN APP
 if __name__ == "__main__":
     # Run Uvicorn server directly
-    uvicorn.run("non-final-draft:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("non-final-draft:app", host="0.0.0.0", port=10000)
