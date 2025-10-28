@@ -31,11 +31,11 @@ services:
       - key: USE_LOCAL_AI
         value: "true"
       - key: EMBEDDER_MODEL_DIR
-        value: ./ai-and-nlp/embedder_model   # Confirm path if different
+        value: ./ai_and_nlp/embedder_model   # Confirm path if different
       - key: CLASSIFIER_PATH
-        value: ./ai-and-nlp/severity_classifier.joblib  # Confirm path
+        value: ./ai_and_nlp/severity_classifier.joblib  # Confirm path
       - key: TRIAGE_CSV
-        value: ./ai-and-nlp/triage2.csv  # Confirm path
+        value: ./ai_and_nlp/triage2.csv  # Confirm path
 
       # App secrets (create in Render > Secrets, then reference here)
       - key: JWT_SECRET

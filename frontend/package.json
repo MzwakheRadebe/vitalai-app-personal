@@ -20,7 +20,7 @@
   "scripts": {
     "start": "npx concurrently \"npm run api\" \"npm run react --delay 5s\"",
     "react": "react-scripts start",
-    "api": "python ../ai-and-nlp/non-final-draft.py",
+    "api": "python ../ai_and_nlp/non-final-draft.py",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
