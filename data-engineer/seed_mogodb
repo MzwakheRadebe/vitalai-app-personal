@@ -1,0 +1,137 @@
+"""
+seed_mongodb.py
+------------------------------------
+Seeds the MongoDB Analytics Database with sample data
+for the VitalAI Healthcare Chatbot System.
+
+Author: Bit by Bit (Group 1)
+Role: Data Engineer - Tshegofatso Motlake
+Date: November 2025
+"""
+
+from pymongo import MongoClient
+from datetime import datetime
+import os
+
+# =============================
+# CONFIGURATION
+# =============================
+
+# Replace with your MongoDB connection string (already provided)
+MONGO_URL = "mongodb+srv://DB_USER_REDACTED:REDACTED_PASSWORD@MONGO_HOST_REDACTED/vitalai_analytics"
+
+# Database and collections
+DB_NAME = "vitalai_analytics"
+CHAT_COLLECTION = "chat_analytics"
+USER_COLLECTION = "user_behavior"
+
+# =============================
+# CONNECT TO MONGODB
+# =============================
+
+try:
+    client = MongoClient(MONGO_URL)
+    db = client[DB_NAME]
+    print(f"✅ Connected to MongoDB Atlas Cluster: {DB_NAME}")
+except Exception as e:
+    print(f"❌ Connection failed: {e}")
+    exit()
+
+# =============================
+# SEED CHAT ANALYTICS DATA
+# =============================
+
+chat_data = [
+    {
+        "session_id": "S001",
+        "patient_id": "P001",
+        "timestamp": datetime.now(),
+        "user_message": "I have a headache and fever",
+        "bot_response": "You might be experiencing flu-like symptoms. Would you like to book an appointment?",
+        "language": "English",
+        "sentiment": "concerned",
+        "triage_level": "moderate",
+        "response_time_ms": 250
+    },
+    {
+        "session_id": "S002",
+        "patient_id": "P002",
+        "timestamp": datetime.now(),
+        "user_message": "Ke utlwa bohloko mokokotlong",
+        "bot_response": "Ho bonahala o na le bohloko mokokotlong. Na re hlophise ngaka bakeng sa hau?",
+        "language": "Sesotho",
+        "sentiment": "neutral",
+        "triage_level": "mild",
+        "response_time_ms": 290
+    },
+    {
+        "session_id": "S003",
+        "patient_id": "P003",
+        "timestamp": datetime.now(),
+        "user_message": "My chest is tight and I can’t breathe properly",
+        "bot_response": "This could be serious. Please proceed to the emergency department immediately.",
+        "language": "English",
+        "sentiment": "distressed",
+        "triage_level": "severe",
+        "response_time_ms": 210
+    }
+]
+
+# =============================
+# SEED USER BEHAVIOR DATA
+# =============================
+
+user_behavior_data = [
+    {
+        "user_id": "P001",
+        "session_count": 5,
+        "avg_chat_duration": 184,  # seconds
+        "most_common_action": "appointment booking",
+        "last_active": datetime.now(),
+        "device_type": "Android",
+        "region": "Gauteng"
+    },
+    {
+        "user_id": "P002",
+        "session_count": 3,
+        "avg_chat_duration": 122,
+        "most_common_action": "symptom check",
+        "last_active": datetime.now(),
+        "device_type": "iOS",
+        "region": "Free State"
+    },
+    {
+        "user_id": "P003",
+        "session_count": 7,
+        "avg_chat_duration": 256,
+        "most_common_action": "triage consultation",
+        "last_active": datetime.now(),
+        "device_type": "Web",
+        "region": "KwaZulu-Natal"
+    }
+]
+
+# =============================
+# INSERT DATA
+# =============================
+
+try:
+    db[CHAT_COLLECTION].insert_many(chat_data)
+    db[USER_COLLECTION].insert_many(user_behavior_data)
+    print("✅ Sample documents successfully inserted into MongoDB!")
+except Exception as e:
+    print(f"❌ Error inserting sample data: {e}")
+
+# =============================
+# CONFIRM DOCUMENT COUNTS
+# =============================
+
+print("\n--- DATABASE SUMMARY ---")
+print(f"Chat Analytics Documents: {db[CHAT_COLLECTION].count_documents({})}")
+print(f"User Behavior Documents: {db[USER_COLLECTION].count_documents({})}")
+
+# =============================
+# CLOSE CONNECTION
+# =============================
+client.close()
+print("🔒 MongoDB connection closed successfully.")
