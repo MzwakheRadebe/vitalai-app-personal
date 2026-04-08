@@ -3,139 +3,92 @@ import { Send, Bot, User, Paperclip, Calendar } from 'lucide-react';
 import LanguageSelector from './LanguageSelector';
 import FileUpload from './FileUpload';
 import AppointmentScheduler from './AppointmentScheduler';
+import { chatAPI } from '../services/api';
 import './ChatInterface.css';
 
 
-const API_BASE_URL =  "http://localhost:5000";
+// Severity level helper — parses the AI reply for a severity keyword
+const getSeverityLabel = (reply) => {
+  const upper = reply.toUpperCase();
+  if (upper.includes('CRITICAL')) return { level: 'CRITICAL', emoji: '🔴', color: '#dc2626' };
+  if (upper.includes('HIGH'))     return { level: 'HIGH',     emoji: '🟠', color: '#ea580c' };
+  if (upper.includes('MEDIUM'))   return { level: 'MEDIUM',   emoji: '🟡', color: '#ca8a04' };
+  if (upper.includes('LOW'))      return { level: 'LOW',      emoji: '🟢', color: '#16a34a' };
+  return null;
+};
 
 
 // Main chat interface component for VitalAI
 const ChatInterface = () => {
-  // State for chat messages
   const [messages, setMessages] = useState([
     {
       id: 1,
-      text: "Hello! I'm VitalAI. How can I help you today? You can describe your symptoms, request an appointment, or upload medical documents.",
+      text: "Hello! I'm VitalAI, your medical triage assistant. Describe your symptoms and I'll assess their severity and advise on next steps. You can also schedule an appointment or upload medical documents.",
       sender: 'bot',
       timestamp: new Date(),
-      type: 'text'
+      type: 'text',
     }
   ]);
-  // State for user input text
   const [inputText, setInputText] = useState('');
-  // State to indicate if bot is "typing"
   const [isLoading, setIsLoading] = useState(false);
-  // State for selected language
   const [selectedLanguage, setSelectedLanguage] = useState('en');
-  // State to show/hide file upload modal
   const [showFileUpload, setShowFileUpload] = useState(false);
-  // State to show/hide appointment scheduler modal
   const [showAppointmentScheduler, setShowAppointmentScheduler] = useState(false);
-  // Ref to scroll to the bottom of messages
   const messagesEndRef = useRef(null);
 
-  // Scroll to bottom when messages change
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Handle sending a message
   const sendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
 
-    // Add user message to chat
     const userMessage = {
       id: Date.now(),
       text: inputText,
       sender: 'user',
       timestamp: new Date(),
-      type: 'text'
+      type: 'text',
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
+    const sentText = inputText;
     setInputText('');
     setIsLoading(true);
-    
+
     try {
-  // Call FastAPI endpoint
-  const response = await fetch(`${API_BASE_URL}/predict`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: inputText })
-  });
+      // Call the real FastAPI backend at /api/chat
+      const data = await chatAPI.sendMessage(sentText, selectedLanguage);
+      const reply = data.reply || 'Sorry, I did not receive a response. Please try again.';
 
-  if (!response.ok) throw new Error("Failed to fetch AI response");
-
-  const data = await response.json();
-
-  let responseText = "";
-const conf = data.confidence.toFixed(2);
-
-switch (data.predicted_severity.toUpperCase()) {
-  case "LOW":
-    responseText = (
-      <>
-        🟢 Your condition appears to be <strong>LOW Severity</strong>. It’s likely mild — monitor your symptoms and rest. Consult a doctor if it persists or you're unsure.
-      </>
-    );
-    break;
-  case "MEDIUM":
-    responseText = (
-      <>
-        🟡 This condition may be of <strong>MODERATE Concern</strong>. You should monitor symptoms and consult a doctor.
-      </>
-    );
-    break;
-  case "HIGH":
-    responseText = (
-      <>
-        🟠⚠️ Your symptoms suggest a <strong>HIGH Severity</strong> condition. Please seek medical advice as soon as possible.
-      </>
-    );
-    break;
-  case "CRITICAL":
-    responseText = (
-      <>
-        🔴⚠️ <strong>CRITICAL Severity</strong> detected. Please seek <strong>immediate medical attention.</strong>
-      </>
-    );
-    break;
-  default:
-    responseText = <>I couldn’t determine severity confidently. Please contact a medical professional.</>;
-}
-
-  // Format bot message based on response
-  const botMessage = {
-    id: Date.now() + 1,
-    text: responseText,
-    sender: 'bot',
-    timestamp: new Date(),
-    type: 'text'
+      const botMessage = {
+        id: Date.now() + 1,
+        text: reply,
+        sender: 'bot',
+        timestamp: new Date(),
+        type: 'text',
+        severity: getSeverityLabel(reply),
+      };
+      setMessages(prev => [...prev, botMessage]);
+    } catch (error) {
+      console.error('Chat API error:', error);
+      const errorMessage = {
+        id: Date.now() + 1,
+        text: '⚠️ Unable to connect to the VitalAI service. Please check your connection and try again.',
+        sender: 'bot',
+        timestamp: new Date(),
+        type: 'text',
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  setMessages(prev => [...prev, botMessage]);
-} catch (error) {
-  console.error("Error fetching AI response:", error);
-
-  const botMessage = {
-    id: Date.now() + 1,
-    text: "⚠️ Sorry, I couldn't process that right now. Please try again.",
-    sender: 'bot',
-    timestamp: new Date(),
-    type: 'text'
-  };
-  setMessages(prev => [...prev, botMessage]);
-} finally {
-  setIsLoading(false);
-}
-
-  };
-
-  // Handle file upload event
   const handleFileUpload = (file) => {
     const fileMessage = {
       id: Date.now(),
@@ -143,27 +96,25 @@ switch (data.predicted_severity.toUpperCase()) {
       sender: 'user',
       timestamp: new Date(),
       type: 'file',
-      file: file
+      file,
     };
     setMessages(prev => [...prev, fileMessage]);
     setShowFileUpload(false);
   };
 
-  // Handle appointment scheduling event
   const handleAppointmentSchedule = (appointmentData) => {
     const appointmentMessage = {
       id: Date.now(),
-      text: `Appointment scheduled for ${appointmentData.date} in ${appointmentData.department}`,
+      text: `Appointment scheduled for ${appointmentData.date} at ${appointmentData.time} — ${appointmentData.department}`,
       sender: 'user',
       timestamp: new Date(),
       type: 'appointment',
-      appointment: appointmentData
+      appointment: appointmentData,
     };
     setMessages(prev => [...prev, appointmentMessage]);
     setShowAppointmentScheduler(false);
   };
 
-  // Handle Enter key press for sending messages
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -181,11 +132,10 @@ switch (data.predicted_severity.toUpperCase()) {
           </div>
           <div className="header-info">
             <h3>VitalAI</h3>
-            <span className="status">Online • Medical Assistant</span>
+            <span className="status">Online • Medical Triage Assistant</span>
           </div>
         </div>
-        {/* Language selection dropdown */}
-        <LanguageSelector 
+        <LanguageSelector
           selectedLanguage={selectedLanguage}
           onLanguageChange={setSelectedLanguage}
         />
@@ -199,7 +149,6 @@ switch (data.predicted_severity.toUpperCase()) {
               {message.sender === 'bot' ? <Bot size={16} /> : <User size={16} />}
             </div>
             <div className="message-content">
-              {/* Render different message types */}
               {message.type === 'file' ? (
                 <div className="file-message">
                   <Paperclip size={16} />
@@ -211,17 +160,27 @@ switch (data.predicted_severity.toUpperCase()) {
                   <span>{message.text}</span>
                 </div>
               ) : (
-                <p>{message.text}</p>
+                <>
+                  {/* Severity badge for bot messages that contain a triage level */}
+                  {message.sender === 'bot' && message.severity && (
+                    <div
+                      className="severity-badge"
+                      style={{ color: message.severity.color }}
+                    >
+                      {message.severity.emoji} Severity: <strong>{message.severity.level}</strong>
+                    </div>
+                  )}
+                  <p>{message.text}</p>
+                </>
               )}
-              {/* Message timestamp */}
               <span className="timestamp">
                 {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
           </div>
         ))}
-        
-        {/* Loading/typing indicator for bot */}
+
+        {/* Typing indicator */}
         {isLoading && (
           <div className="message bot">
             <div className="message-avatar">
@@ -236,7 +195,6 @@ switch (data.predicted_severity.toUpperCase()) {
             </div>
           </div>
         )}
-        {/* Dummy div to scroll to bottom */}
         <div ref={messagesEndRef} />
       </div>
 
@@ -254,15 +212,9 @@ switch (data.predicted_severity.toUpperCase()) {
 
       {/* Input Area */}
       <div className="input-area">
-        {/* Attachment button */}
-        <button 
-          className="attachment-btn"
-          onClick={() => setShowFileUpload(true)}
-        >
+        <button className="attachment-btn" onClick={() => setShowFileUpload(true)}>
           <Paperclip size={18} />
         </button>
-        
-        {/* Text input for user messages */}
         <input
           type="text"
           value={inputText}
@@ -271,10 +223,8 @@ switch (data.predicted_severity.toUpperCase()) {
           placeholder="Describe your symptoms or ask for help..."
           disabled={isLoading}
         />
-        
-        {/* Send button */}
-        <button 
-          onClick={sendMessage} 
+        <button
+          onClick={sendMessage}
           disabled={!inputText.trim() || isLoading}
           className="send-button"
         >
@@ -284,14 +234,13 @@ switch (data.predicted_severity.toUpperCase()) {
 
       {/* Modals */}
       {showFileUpload && (
-        <FileUpload 
+        <FileUpload
           onFileUpload={handleFileUpload}
           onClose={() => setShowFileUpload(false)}
         />
       )}
-      
       {showAppointmentScheduler && (
-        <AppointmentScheduler 
+        <AppointmentScheduler
           onSchedule={handleAppointmentSchedule}
           onClose={() => setShowAppointmentScheduler(false)}
         />

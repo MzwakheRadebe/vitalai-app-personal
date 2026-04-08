@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, User, Stethoscope } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import './Login.css';
 
 const Login = ({ onLogin, onSwitchToRegister }) => {
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -10,8 +12,10 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleInputChange = (field, value) => {
+    setError('');
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -21,19 +25,17 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
 
-    // Mock login - replace with actual API call
-    setTimeout(() => {
-      const userData = {
-        id: 'user-' + Date.now(),
-        email: formData.email,
-        userType: formData.userType,
-        name: formData.email.split('@')[0],
-        avatar: `https://ui-avatars.com/api/?name=${formData.email.split('@')[0]}&background=667eea&color=fff`
-      };
+    try {
+      const userData = await login(formData.email, formData.password);
       onLogin(userData);
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Invalid email or password. Please try again.';
+      setError(msg);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -116,8 +118,14 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
             <a href="#forgot" className="forgot-link">Forgot password?</a>
           </div>
 
-          <button 
-            type="submit" 
+          {error && (
+            <div className="error-message" style={{ color: '#dc2626', marginBottom: '12px', fontSize: '14px' }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
             className="login-btn"
             disabled={isLoading}
           >
@@ -134,11 +142,6 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
           </p>
         </div>
 
-        <div className="demo-credentials">
-          <h4>Demo Credentials:</h4>
-          <p>Email: demo@vitalai.com</p>
-          <p>Password: demo123</p>
-        </div>
       </div>
     </div>
   );

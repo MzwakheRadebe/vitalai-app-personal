@@ -46,7 +46,7 @@ def create_access_token(subject: str, role: str = "user", expires_minutes: int =
         "iss": settings.app_name,
     }
     try:
-        return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+        return jwt.encode(payload, settings.get_effective_jwt_secret(), algorithm="HS256")
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to create access token")
 
@@ -54,7 +54,7 @@ def create_access_token(subject: str, role: str = "user", expires_minutes: int =
 def decode_access_token(token: str) -> Dict[str, Any]:
     settings = get_settings()
     try:
-        return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+        return jwt.decode(token, settings.get_effective_jwt_secret(), algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:

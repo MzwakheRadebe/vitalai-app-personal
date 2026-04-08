@@ -3,9 +3,13 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
-# Environment and secrets
+# Environment and secrets — never commit real credentials
 .env
-.env.*
+.env.local
+.env.production
+.env.development
+# Allow .env.example (safe template with no real values)
+!.env.example
 
 # Local dev database
 local_offline.db

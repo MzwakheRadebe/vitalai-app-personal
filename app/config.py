@@ -1,10 +1,11 @@
 """Application configuration
 
 Centralized settings loaded from environment variables via pydantic-settings.
-We keep types simple (e.g., `allowed_origins` as a string) to reduce friction
-in local development where values may be comma-separated or JSON.
+Copy .env.example to .env and fill in your values for local development.
+In production, set these as environment variables (e.g., on Render).
 """
 
+import secrets
 from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -17,41 +18,50 @@ class Settings(BaseSettings):
     port: int = Field(default=8000)
     tz: str = Field(default="Africa/Johannesburg")
 
-    # Data backends (optional in early scaffolding)
-    mysql_url: str = Field(default="")
-    mongo_url: str = Field(default="mongodb://localhost:27017/hospital_logs")
+    # Database — Supabase PostgreSQL (primary)
+    # Set DATABASE_URL in your .env or production environment variables
+    database_url: str = Field(default="")
+    supabase_url: str = Field(default="")
+    supabase_key: str = Field(default="")
+
+    # SQLite fallback (local development only)
     sqlite_path: str = Field(default="./local_offline.db")
 
-    # Security and CORS
-    jwt_secret: str = Field(default="change_me")
-    encryption_key: str = Field(default="change_me_base64_32bytes")
-    allowed_origins: str = Field(default="")  # e.g., "*" or comma-separated list
+    # Security
+    # IMPORTANT: Always set a strong random value in production.
+    # Generate one with: python -c "import secrets; print(secrets.token_hex(32))"
+    jwt_secret: str = Field(default="")
+    encryption_key: str = Field(default="")
+    jwt_algorithm: str = Field(default="HS256")
+    jwt_expire_minutes: int = Field(default=60)
 
-    # AI service integration (managed defaults for beginner teams)
-    # If you prefer local backends, override these in `.env`.
+    # CORS — set to your frontend URL in production (e.g., https://your-app.vercel.app)
+    allowed_origins: str = Field(default="http://localhost:3000")
+
+    # AI service integration
     ai_service_url: str = Field(default="https://api.openai.com/v1")
-    ai_model: str = Field(default="gpt-4o-mini")  # used for OpenAI-style endpoints
-    ai_api_key: str = Field(default="")  # optional; adds Authorization header if set
+    ai_model: str = Field(default="gpt-4o-mini")
+    ai_api_key: str = Field(default="")
 
-    # Local AI module integration (optional)
-    # ai_local_enabled: bool = Field(default=False)
-    # ai_local_path: str = Field(default="")
-    # ai_local_function: str = Field(default="answer")
+    def get_effective_jwt_secret(self) -> str:
+        """Return JWT secret, generating a temporary one for local dev if not set."""
+        if self.jwt_secret:
+            return self.jwt_secret
+        if self.env == "development":
+            # Safe for local dev — not suitable for production
+            return secrets.token_hex(32)
+        raise ValueError(
+            "JWT_SECRET environment variable must be set in production. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
 
     class Config:
-        # `.env` file support for local development
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
 
-    
-
 
 @lru_cache
 def get_settings() -> Settings:
-    """Return a cached Settings instance.
-
-    Avoids re-reading environment on every request and provides fast access
-    to configuration throughout the app.
-    """
+    """Return a cached Settings instance."""
     return Settings()

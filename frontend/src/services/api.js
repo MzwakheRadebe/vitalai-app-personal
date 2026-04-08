@@ -1,64 +1,125 @@
+/**
+ * VitalAI API Service
+ *
+ * All API calls to the FastAPI backend.
+ * Set REACT_APP_API_URL in your .env file for local dev,
+ * or as an environment variable in Vercel for production.
+ */
+
 import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-// Mock data for development
-const mockResponses = {
-  symptoms: {
-    headache: "I understand you're experiencing a headache. How long have you had this pain?",
-    fever: "For fever symptoms, please monitor your temperature. Have you taken any medication?",
-    appointment: "I can help schedule an appointment. Which department do you need?",
-    emergency: "This sounds serious. Please proceed to emergency care immediately."
+// Attach JWT token to every request if available
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('vitalai_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
+  return config;
+});
+
+// Handle auth errors globally
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('vitalai_token');
+      localStorage.removeItem('vitalai_user');
+    }
+    return Promise.reject(error);
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export const authAPI = {
+  login: async (email, password) => {
+    const response = await api.post('/api/auth/login', { email, password });
+    return response.data;
+  },
+
+  register: async (email, password, role = 'patient') => {
+    const response = await api.post('/api/auth/register', { email, password, role });
+    return response.data;
+  },
+
+  getMe: async () => {
+    const response = await api.get('/api/auth/me');
+    return response.data;
+  },
 };
+
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
 
 export const chatAPI = {
   sendMessage: async (message, language = 'en') => {
-    try {
-      // For now, use mock responses
-      const mockResponse = getMockResponse(message);
-      return { data: { reply: mockResponse, triage_level: 'MEDIUM', department: 'General Practice' } };
-      
-      // TODO: Uncomment when backend is ready
-      // return await api.post('/chat', { message, language });
-    } catch (error) {
-      console.error('API Error:', error);
-      throw error;
-    }
+    const response = await api.post('/api/chat', {
+      prompt: message,
+      language,
+    });
+    return response.data;
   },
-
-  scheduleAppointment: async (appointmentData) => {
-    // Mock appointment scheduling
-    return { 
-      data: { 
-        success: true, 
-        appointment_id: 'APT-' + Date.now(),
-        date: appointmentData.date,
-        department: appointmentData.department
-      } 
-    };
-  }
 };
 
-const getMockResponse = (userInput) => {
-  const input = userInput.toLowerCase();
-  
-  if (input.includes('headache') || input.includes('pain')) {
-    return mockResponses.symptoms.headache;
-  } else if (input.includes('fever') || input.includes('temperature')) {
-    return mockResponses.symptoms.fever;
-  } else if (input.includes('appointment') || input.includes('schedule')) {
-    return mockResponses.symptoms.appointment;
-  } else if (input.includes('emergency') || input.includes('urgent')) {
-    return mockResponses.symptoms.emergency;
-  } else {
-    return "Thank you for sharing. Could you tell me more about your symptoms so I can better assist you?";
-  }
+// ---------------------------------------------------------------------------
+// Appointments
+// ---------------------------------------------------------------------------
+
+export const appointmentsAPI = {
+  create: async (appointmentData) => {
+    const response = await api.post('/api/appointments', appointmentData);
+    return response.data;
+  },
+
+  list: async () => {
+    const response = await api.get('/api/appointments');
+    return response.data;
+  },
+
+  getById: async (id) => {
+    const response = await api.get(`/api/appointments/${id}`);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    const response = await api.delete(`/api/appointments/${id}`);
+    return response.data;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// FAQ
+// ---------------------------------------------------------------------------
+
+export const faqAPI = {
+  list: async () => {
+    const response = await api.get('/api/faq');
+    return response.data;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Health check
+// ---------------------------------------------------------------------------
+
+export const healthAPI = {
+  check: async () => {
+    const response = await api.get('/health');
+    return response.data;
+  },
 };
 
 export default api;

@@ -60,8 +60,12 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     if len(p) > 1000:
         raise HTTPException(status_code=400, detail="Prompt exceeds 1000 characters")
 
-    # Naive per-IP rate limiting (in-memory, resets every window)
-    ip = request.client.host if request.client else "unknown"
+    # Per-IP rate limiting — respect X-Forwarded-For for deployments behind proxies
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        ip = forwarded_for.split(",")[0].strip()
+    else:
+        ip = request.client.host if request.client else "unknown"
     now = monotonic()
     start, count = _rate_state.get(ip, (now, 0))
     if now - start > RATE_LIMIT_WINDOW_SECONDS:
@@ -95,7 +99,22 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
             if use_openai:
                 payload = {
                     "model": settings.ai_model,
-                    "messages": [{"role": "user", "content": p}],
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are VitalAI, a medical triage assistant for South African clinics and hospitals. "
+                                "When a user describes symptoms, assess the severity and respond with: "
+                                "1) A brief, clear explanation of what the symptoms may indicate. "
+                                "2) A severity level: LOW (monitor at home), MEDIUM (see a doctor soon), "
+                                "HIGH (urgent medical attention needed), or CRITICAL (go to emergency immediately). "
+                                "3) Practical next steps. "
+                                "Always remind users you are an AI assistant and not a substitute for professional medical advice. "
+                                "Keep responses concise and easy to understand."
+                            ),
+                        },
+                        {"role": "user", "content": p},
+                    ],
                     "stream": False,
                 }
             else:

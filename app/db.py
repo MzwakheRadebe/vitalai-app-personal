@@ -1,38 +1,98 @@
 """
-SQLite database initialization and helpers.
+Database initialization and helpers.
 
-- Creates tables for `appointments` and `faq` on app startup.
-- Provides simple DDL definitions and a utility initializer.
-- Uses ISO8601 strings for datetime fields to keep comparisons simple.
+Supports two backends:
+- PostgreSQL via DATABASE_URL (Supabase or any Postgres — used in production)
+- SQLite fallback via SQLITE_PATH (local development only)
 
-Note: We open connections per request using `aiosqlite.connect` rather than
-sharing one global connection, which keeps concurrency straightforward.
+Tables: users, appointments, faq
 """
 
 from __future__ import annotations
 
-import aiosqlite
-from .config import get_settings
+import logging
+from app.config import get_settings
+
+logger = logging.getLogger("db")
 
 
-# -- DDL definitions (kept simple; adjust as schema evolves) --
-CREATE_APPOINTMENTS_TABLE = """
+# -- DDL for PostgreSQL --
+PG_CREATE_USERS_TABLE = """
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'patient',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+"""
+
+PG_CREATE_APPOINTMENTS_TABLE = """
 CREATE TABLE IF NOT EXISTS appointments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     patient_name TEXT NOT NULL,
     clinician TEXT NOT NULL,
-    starts_at TEXT NOT NULL,  -- ISO8601 datetime string
-    ends_at TEXT NOT NULL,    -- ISO8601 datetime string
+    department TEXT,
+    starts_at TEXT NOT NULL,
+    ends_at TEXT NOT NULL,
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (starts_at < ends_at)
 );
 """
 
-CREATE_APPOINTMENTS_INDEX = """
+PG_CREATE_APPOINTMENTS_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_appointments_clinician_start_end
 ON appointments (clinician, starts_at, ends_at);
 """
 
-CREATE_FAQ_TABLE = """
+PG_CREATE_FAQ_TABLE = """
+CREATE TABLE IF NOT EXISTS faq (
+    id SERIAL PRIMARY KEY,
+    question TEXT NOT NULL UNIQUE,
+    answer TEXT NOT NULL
+);
+"""
+
+PG_FAQ_SEED = [
+    ("Clinic hours?", "Mon–Fri 08:00–16:00"),
+    ("Do I need my ID?", "Bring your SA ID or passport and any referral notes."),
+    ("How do I book an appointment?", "Use the Patient Portal to book online, or call reception."),
+    ("What languages are supported?", "VitalAI supports English, Zulu, Xhosa, Sotho, Tswana, and more."),
+]
+
+
+# -- DDL for SQLite (local dev) --
+SQLITE_CREATE_USERS_TABLE = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'patient',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
+SQLITE_CREATE_APPOINTMENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS appointments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_name TEXT NOT NULL,
+    clinician TEXT NOT NULL,
+    department TEXT,
+    starts_at TEXT NOT NULL,
+    ends_at TEXT NOT NULL,
+    reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    CHECK (starts_at < ends_at)
+);
+"""
+
+SQLITE_CREATE_APPOINTMENTS_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_appointments_clinician_start_end
+ON appointments (clinician, starts_at, ends_at);
+"""
+
+SQLITE_CREATE_FAQ_TABLE = """
 CREATE TABLE IF NOT EXISTS faq (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     question TEXT NOT NULL UNIQUE,
@@ -40,58 +100,79 @@ CREATE TABLE IF NOT EXISTS faq (
 );
 """
 
-CREATE_FAQ_UNIQUE_INDEX = """
-CREATE UNIQUE INDEX IF NOT EXISTS idx_faq_question_unique
-ON faq (question);
-"""
 
 async def init_db() -> None:
-    """Initialize the SQLite database with required tables and seed data.
-
-    Runs at application startup to ensure schema exists for local dev.
-    If `MYSQL_URL` is set, skips SQLite init since MySQL will be used.
-
-    Pragmas:
-    - foreign_keys=ON: plan for future relational constraints
-    - journal_mode=WAL: better concurrency during development
-    - synchronous=NORMAL: faster local writes at acceptable risk
-    """
+    """Initialize the database on application startup."""
     settings = get_settings()
-    
-    # Skip SQLite initialization if MySQL is configured
-    if settings.mysql_url:
-        return
-    
-    async with aiosqlite.connect(settings.sqlite_path) as db:
-        # Enable foreign keys for future relational constraints.
-        await db.execute("PRAGMA foreign_keys = ON;")
-        # Use write-ahead logging for better concurrency in dev.
-        await db.execute("PRAGMA journal_mode = WAL;")
-        # Relax synchronous for faster local writes; acceptable trade-off in dev.
-        await db.execute("PRAGMA synchronous = NORMAL;")
-        await db.execute(CREATE_APPOINTMENTS_TABLE)
-        await db.execute(CREATE_APPOINTMENTS_INDEX)
-        await db.execute(CREATE_FAQ_TABLE)
-        try:
-            await db.execute(CREATE_FAQ_UNIQUE_INDEX)
-        except Exception:
-            # If duplicates already exist, this will fail; leave as-is.
-            pass
-        await db.commit()
 
-        # Seed FAQ entries on first run for developer visibility.
-        try:
+    if settings.database_url:
+        await _init_postgres(settings.database_url)
+    else:
+        logger.warning("DATABASE_URL not set — using SQLite fallback (local dev only)")
+        await _init_sqlite(settings.sqlite_path)
+
+
+async def _init_postgres(database_url: str) -> None:
+    """Set up PostgreSQL tables using asyncpg."""
+    try:
+        import asyncpg
+    except ImportError:
+        logger.error("asyncpg not installed. Run: pip install asyncpg")
+        return
+
+    try:
+        conn = await asyncpg.connect(database_url)
+        await conn.execute(PG_CREATE_USERS_TABLE)
+        await conn.execute(PG_CREATE_APPOINTMENTS_TABLE)
+        await conn.execute(PG_CREATE_APPOINTMENTS_INDEX)
+        await conn.execute(PG_CREATE_FAQ_TABLE)
+
+        # Seed FAQ on first run
+        count = await conn.fetchval("SELECT COUNT(*) FROM faq")
+        if count == 0:
+            await conn.executemany(
+                "INSERT INTO faq (question, answer) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                PG_FAQ_SEED,
+            )
+
+        await conn.close()
+        logger.info("PostgreSQL database initialized successfully")
+    except Exception as e:
+        logger.error(f"PostgreSQL initialization failed: {e}")
+
+
+async def _init_sqlite(sqlite_path: str) -> None:
+    """Set up SQLite tables for local development."""
+    try:
+        import aiosqlite
+    except ImportError:
+        logger.error("aiosqlite not installed. Run: pip install aiosqlite")
+        return
+
+    try:
+        async with aiosqlite.connect(sqlite_path) as db:
+            await db.execute("PRAGMA foreign_keys = ON;")
+            await db.execute("PRAGMA journal_mode = WAL;")
+            await db.execute("PRAGMA synchronous = NORMAL;")
+            await db.execute(SQLITE_CREATE_USERS_TABLE)
+            await db.execute(SQLITE_CREATE_APPOINTMENTS_TABLE)
+            try:
+                await db.execute(SQLITE_CREATE_APPOINTMENTS_INDEX)
+            except Exception:
+                pass
+            await db.execute(SQLITE_CREATE_FAQ_TABLE)
+            await db.commit()
+
+            # Seed FAQ
             async with db.execute("SELECT COUNT(*) FROM faq") as cur:
                 (count,) = await cur.fetchone()
             if count == 0:
                 await db.executemany(
-                    "INSERT INTO faq (question, answer) VALUES (?, ?)",
-                    [
-                        ("Clinic hours?", "Mon–Fri 08:00–16:00"),
-                        ("Do I need my ID?", "Bring SA ID or passport and any referral notes."),
-                    ],
+                    "INSERT OR IGNORE INTO faq (question, answer) VALUES (?, ?)",
+                    PG_FAQ_SEED,
                 )
                 await db.commit()
-        except Exception:
-            # Non-fatal: if seed fails, continue; FAQ can be added via API.
-            pass
+
+        logger.info("SQLite database initialized successfully")
+    except Exception as e:
+        logger.error(f"SQLite initialization failed: {e}")
