@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Stethoscope, MessageCircle, Calendar, Upload, Users, Shield } from 'lucide-react';
+import { Stethoscope, MessageCircle, Calendar, Upload, Users, Shield, ArrowLeft, LogOut } from 'lucide-react';
 import ChatInterface from '../components/ChatInterface';
 import Login from '../components/Login';
+import Register from '../components/Register';
 import './Home.css';
 
 const Home = () => {
@@ -18,18 +19,99 @@ const Home = () => {
     setCurrentView('welcome');
   };
 
-  // Render different views based on state
+  // ── Chat view with navigation bar ──────────────────────────────────────────
   if (currentView === 'chat') {
-    // Fix: Check if user exists before accessing userType
     const userType = user ? user.userType : 'patient';
-    return <ChatInterface userType={userType} />;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        {/* Top nav bar */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 20px',
+          background: '#ffffff',
+          borderBottom: '1px solid #e5e7eb',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+          flexShrink: 0,
+        }}>
+          <button
+            onClick={() => setCurrentView('welcome')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#6b7280', fontSize: '14px', padding: '6px 10px',
+              borderRadius: '6px', transition: 'background 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+          >
+            <ArrowLeft size={16} /> Back to Home
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: '#1f2937' }}>
+            <Stethoscope size={20} color="#667eea" />
+            VitalAI
+          </div>
+
+          {user ? (
+            <button
+              onClick={handleLogout}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: 'none', border: '1px solid #e5e7eb', cursor: 'pointer',
+                color: '#6b7280', fontSize: '14px', padding: '6px 12px',
+                borderRadius: '6px', transition: 'background 0.2s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <LogOut size={14} /> Sign out
+            </button>
+          ) : (
+            <button
+              onClick={() => setCurrentView('login')}
+              style={{
+                background: '#667eea', color: '#fff', border: 'none',
+                padding: '6px 14px', borderRadius: '6px', cursor: 'pointer',
+                fontSize: '14px', fontWeight: 500,
+              }}
+            >
+              Sign in
+            </button>
+          )}
+        </div>
+
+        {/* Chat takes the rest of the height */}
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <ChatInterface userType={userType} />
+        </div>
+      </div>
+    );
   }
 
+  // ── Login view ─────────────────────────────────────────────────────────────
   if (currentView === 'login') {
-    return <Login onLogin={handleLogin} onSwitchToRegister={() => setCurrentView('welcome')} />;
+    return (
+      <Login
+        onLogin={handleLogin}
+        onSwitchToRegister={() => setCurrentView('register')}
+        onBack={() => setCurrentView('welcome')}
+      />
+    );
   }
 
-  // Welcome/Landing Page
+  // ── Register view ──────────────────────────────────────────────────────────
+  if (currentView === 'register') {
+    return (
+      <Register
+        onSwitchToLogin={() => setCurrentView('login')}
+        onBack={() => setCurrentView('welcome')}
+      />
+    );
+  }
+
+  // ── Welcome / Landing page ─────────────────────────────────────────────────
   return (
     <div className="home-container">
       {/* Header */}
@@ -40,7 +122,8 @@ const Home = () => {
             <h1>VitalAI</h1>
           </div>
           <nav className="nav-links">
-            <button onClick={() => setCurrentView('login')} className="nav-link">Staff Login</button>
+            <button onClick={() => setCurrentView('login')} className="nav-link">Sign In</button>
+            <button onClick={() => setCurrentView('register')} className="nav-link">Sign Up</button>
             <button onClick={() => setCurrentView('chat')} className="nav-link primary">Get Started</button>
           </nav>
         </div>
@@ -55,20 +138,14 @@ const Home = () => {
               Reducing patient backlogs in South African hospitals through intelligent automation
             </p>
             <p className="hero-description">
-              VitalAI helps you schedule appointments, get medical advice, and manage your healthcare 
+              VitalAI helps you schedule appointments, get medical advice, and manage your healthcare
               needs through an intelligent chatbot available 24/7 in multiple languages.
             </p>
             <div className="hero-actions">
-              <button 
-                onClick={() => setCurrentView('chat')}
-                className="cta-button primary"
-              >
+              <button onClick={() => setCurrentView('chat')} className="cta-button primary">
                 Start Chat with VitalAI
               </button>
-              <button 
-                onClick={() => setCurrentView('login')}
-                className="cta-button secondary"
-              >
+              <button onClick={() => setCurrentView('login')} className="cta-button secondary">
                 Healthcare Staff Login
               </button>
             </div>
@@ -77,21 +154,15 @@ const Home = () => {
             <div className="chat-preview">
               <div className="chat-message bot">
                 <div className="message-avatar">V</div>
-                <div className="message-content">
-                  Hello! I'm VitalAI. How can I help you today?
-                </div>
+                <div className="message-content">Hello! I'm VitalAI. How can I help you today?</div>
               </div>
               <div className="chat-message user">
-                <div className="message-content">
-                  I need to schedule an appointment
-                </div>
+                <div className="message-content">I have a severe headache and fever</div>
                 <div className="message-avatar">U</div>
               </div>
               <div className="chat-message bot">
                 <div className="message-avatar">V</div>
-                <div className="message-content">
-                  I can help with that! Which department do you need?
-                </div>
+                <div className="message-content">🟡 MEDIUM severity — please consult a doctor soon.</div>
               </div>
             </div>
           </div>
@@ -136,22 +207,10 @@ const Home = () => {
       <section className="stats-section">
         <div className="container">
           <div className="stats-grid">
-            <div className="stat">
-              <h3>50%</h3>
-              <p>Reduction in Admin Time</p>
-            </div>
-            <div className="stat">
-              <h3>24/7</h3>
-              <p>Availability</p>
-            </div>
-            <div className="stat">
-              <h3>5</h3>
-              <p>Languages Supported</p>
-            </div>
-            <div className="stat">
-              <h3>1000+</h3>
-              <p>Patients Served</p>
-            </div>
+            <div className="stat"><h3>50%</h3><p>Reduction in Admin Time</p></div>
+            <div className="stat"><h3>24/7</h3><p>Availability</p></div>
+            <div className="stat"><h3>10+</h3><p>Languages Supported</p></div>
+            <div className="stat"><h3>1000+</h3><p>Patients Served</p></div>
           </div>
         </div>
       </section>
@@ -161,10 +220,7 @@ const Home = () => {
         <div className="container">
           <h2>Ready to Get Started?</h2>
           <p>Join thousands of patients using VitalAI for better healthcare access</p>
-          <button 
-            onClick={() => setCurrentView('chat')}
-            className="cta-button large"
-          >
+          <button onClick={() => setCurrentView('chat')} className="cta-button large">
             Start Chatting with VitalAI
           </button>
         </div>
@@ -173,7 +229,7 @@ const Home = () => {
       {/* Footer */}
       <footer className="home-footer">
         <div className="container">
-          <p>&copy; 2024 VitalAI. AI-powered healthcare assistance for South Africa.</p>
+          <p>&copy; 2025 VitalAI. AI-powered healthcare assistance for South Africa.</p>
         </div>
       </footer>
     </div>

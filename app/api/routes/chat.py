@@ -141,8 +141,67 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
             logger.info("/api/chat response ip=%s reply_len=%d", ip, len(reply))
             return ChatResponse(reply=reply)
     except Exception:
-        # Graceful fallback so the endpoint works even without an AI service.
-        # This keeps docs usable and confirms request plumbing during local dev.
-        stub = f"[stub] VitalAI received: {p}"
-        logger.warning("/api/chat stub-response ip=%s reply_len=%d", ip, len(stub))
-        return ChatResponse(reply=stub)
+        # No AI service configured or unreachable — return a smart demo response
+        # based on keywords so users can test the full flow without an API key.
+        reply = _demo_triage(p)
+        logger.warning("/api/chat demo-response ip=%s reply_len=%d", ip, len(reply))
+        return ChatResponse(reply=reply)
+
+
+def _demo_triage(prompt: str) -> str:
+    """Keyword-based triage used when no AI service is configured.
+
+    Gives realistic-looking responses for local development and demos.
+    Replace with a real AI key in production for accurate medical guidance.
+    """
+    p = prompt.lower()
+
+    if any(w in p for w in ["chest pain", "heart attack", "can't breathe", "cannot breathe", "stroke", "unconscious", "faint"]):
+        return (
+            "🔴 CRITICAL — This sounds like a medical emergency.\n\n"
+            "Please call emergency services (10177 or 112) immediately or go to your nearest emergency room.\n\n"
+            "Do not drive yourself. Stay calm and keep the person still until help arrives.\n\n"
+            "⚠️ VitalAI is an AI assistant — always seek immediate professional help in emergencies."
+        )
+
+    if any(w in p for w in ["high fever", "severe", "vomiting blood", "bleeding", "broken", "fracture", "seizure", "collapse"]):
+        return (
+            "🟠 HIGH severity detected.\n\n"
+            f"Your symptoms ({prompt}) suggest you need urgent medical attention.\n\n"
+            "Next steps:\n"
+            "• Visit your nearest clinic or hospital today\n"
+            "• Do not wait if symptoms worsen\n"
+            "• Bring your ID and any current medication\n\n"
+            "⚠️ VitalAI is an AI assistant and not a substitute for professional medical advice."
+        )
+
+    if any(w in p for w in ["fever", "headache", "pain", "sore throat", "cough", "nausea", "dizzy", "tired", "fatigue", "flu", "cold"]):
+        return (
+            "🟡 MEDIUM severity.\n\n"
+            f"Your symptoms ({prompt}) are worth monitoring and may need medical attention.\n\n"
+            "Next steps:\n"
+            "• Rest and stay hydrated\n"
+            "• Monitor your temperature if you have a fever\n"
+            "• Book an appointment with a doctor if symptoms persist beyond 2 days\n"
+            "• You can use the 'Schedule Appointment' button below to book one\n\n"
+            "⚠️ VitalAI is an AI assistant and not a substitute for professional medical advice."
+        )
+
+    if any(w in p for w in ["appointment", "book", "schedule", "doctor", "clinic", "hospital"]):
+        return (
+            "📅 I can help you schedule an appointment!\n\n"
+            "Click the 'Schedule Appointment' button below to choose a department, date, and time.\n\n"
+            "Available departments include General Practice, Cardiology, Paediatrics, and more."
+        )
+
+    # General / unclear symptoms
+    return (
+        "🟢 LOW concern based on your description.\n\n"
+        f"I've noted your message: \"{prompt}\"\n\n"
+        "General advice:\n"
+        "• Rest and drink plenty of fluids\n"
+        "• Monitor your symptoms over the next 24 hours\n"
+        "• If symptoms worsen or new ones appear, consult a healthcare professional\n\n"
+        "💡 Tip: For a more accurate assessment, connect an AI API key in your settings.\n"
+        "⚠️ VitalAI is an AI assistant and not a substitute for professional medical advice."
+    )

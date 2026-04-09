@@ -3,7 +3,7 @@ import { Mail, Lock, Eye, EyeOff, User, Stethoscope } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import './Login.css';
 
-const Login = ({ onLogin, onSwitchToRegister }) => {
+const Login = ({ onLogin, onSwitchToRegister, onBack }) => {
   const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
@@ -41,6 +41,18 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
   return (
     <div className="login-container">
       <div className="login-card">
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#6b7280', fontSize: '13px', marginBottom: '12px', padding: 0,
+            }}
+          >
+            ← Back to Home
+          </button>
+        )}
         <div className="login-header">
           <div className="logo">
             <Stethoscope size={32} />
