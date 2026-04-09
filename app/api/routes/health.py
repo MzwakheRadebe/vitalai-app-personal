@@ -40,4 +40,15 @@ async def health():
     except Exception:
         ai_status["status"] = "unreachable"
 
-    return {"status": "ok", "env": settings.env, "ai_backend": ai_status}
+    # Quick database connectivity check
+    db_status = {"status": "not_checked", "error": None}
+    try:
+        from app.db_adapter import get_db
+        async with get_db() as db:
+            await db.fetchone("SELECT 1", ())
+            db_status["status"] = "ok"
+    except Exception as e:
+        db_status["status"] = "error"
+        db_status["error"] = str(e)[:200]
+
+    return {"status": "ok", "env": settings.env, "ai_backend": ai_status, "db": db_status}
