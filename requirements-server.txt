@@ -1,0 +1,16 @@
+# Backend API server dependencies only
+# ML model (torch, spacy, sentence_transformers) runs separately in ai_and_nlp/
+# This file is used by Render for the FastAPI backend deployment
+
+fastapi==0.119.1
+uvicorn==0.38.0
+pydantic==2.12.3
+pydantic-settings==2.5.2
+pydantic[email]>=2.9.1
+email-validator>=2.1.0
+python-dotenv==1.0.1
+asyncpg==0.29.0
+aiosqlite==0.20.0
+PyJWT==2.9.0
+httpx==0.27.2
+starlette==0.48.0
