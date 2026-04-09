@@ -18,6 +18,7 @@ import httpx
 import logging
 from time import monotonic
 from app.config import get_settings
+from app.triage_conditions import CRITICAL_KEYWORDS, HIGH_KEYWORDS
 
 
 router = APIRouter(prefix="/chat")
@@ -159,37 +160,17 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
 def _force_severity(prompt: str) -> str | None:
     """Override the ML model when it under-classifies clearly serious symptoms.
 
-    The trained model may rate 'broken toe' as MEDIUM, but any broken bone,
-    dislocation, or separation is clinically HIGH. These overrides ensure
-    the response matches real-world triage standards.
+    Uses the comprehensive keyword lists from app.triage_conditions which cover
+    150+ clinical scenarios across all major body systems.
+
+    Priority: CRITICAL > HIGH > (None — ML model decides)
     """
     p = prompt.lower()
 
-    # Always CRITICAL — life-threatening
-    critical_keywords = [
-        "heart attack", "stroke", "can't breathe", "cannot breathe",
-        "not breathing", "stopped breathing", "unconscious", "unresponsive",
-        "choking", "overdose", "suicidal", "want to die", "end my life",
-        "severe allergic", "anaphylaxis", "seizure", "fitting",
-        "vomiting blood", "coughing blood", "internal bleeding",
-    ]
-    if any(k in p for k in critical_keywords):
+    if any(k in p for k in CRITICAL_KEYWORDS):
         return "CRITICAL"
 
-    # Always HIGH — urgent, same-day care needed
-    high_keywords = [
-        "broken", "fracture", "fractured", "dislocated", "dislocation",
-        "torn", "tear", "separated", "separation", "snapped",
-        "compound fracture", "open fracture", "bone sticking",
-        "can't move", "cannot move", "numbness", "paralysis",
-        "deep cut", "won't stop bleeding", "gaping wound",
-        "severe burn", "third degree", "severe chest pain",
-        "severe abdominal", "appendix", "appendicitis",
-        "meningitis", "stiff neck with fever", "vision loss",
-        "sudden vision", "slurred speech", "face drooping",
-        "high fever", "fever above 40", "fever over 40",
-    ]
-    if any(k in p for k in high_keywords):
+    if any(k in p for k in HIGH_KEYWORDS):
         return "HIGH"
 
     return None  # Let the ML model decide
@@ -241,19 +222,40 @@ def _build_response(prompt: str, severity: str, conf_pct: int = 0) -> str:
     p = prompt.lower()
 
     # -- Detect symptom category --
-    is_head    = any(w in p for w in ["headache", "migraine", "head", "forehead", "temple"])
-    is_chest   = any(w in p for w in ["chest", "heart", "palpitation", "breathing", "breath"])
-    is_fever   = any(w in p for w in ["fever", "temperature", "chills", "sweating", "hot"])
-    is_stomach = any(w in p for w in ["stomach", "nausea", "vomit", "diarrhea", "abdomen", "bloat", "cramp", "bowel"])
-    is_throat  = any(w in p for w in ["throat", "swallow", "tonsil", "hoarse", "voice"])
-    is_cough   = any(w in p for w in ["cough", "wheeze", "phlegm", "mucus", "congestion"])
+    is_head    = any(w in p for w in ["headache", "migraine", "head", "forehead", "temple", "skull"])
+    is_chest   = any(w in p for w in ["chest", "heart", "palpitation", "breathing", "breath", "lung", "pulmonary"])
+    is_fever   = any(w in p for w in ["fever", "temperature", "chills", "sweating", "hot", "shivering"])
+    is_stomach = any(w in p for w in [
+        "stomach", "nausea", "vomit", "diarrhea", "diarrhoea", "abdomen", "abdominal",
+        "bloat", "cramp", "bowel", "gut", "digestion", "indigestion", "appendix",
+        "pancreas", "gallbladder",
+    ])
+    is_throat  = any(w in p for w in ["throat", "swallow", "tonsil", "hoarse", "voice", "larynx", "pharynx"])
+    is_cough   = any(w in p for w in ["cough", "wheeze", "phlegm", "mucus", "congestion", "respiratory", "bronchitis"])
     is_injury  = any(w in p for w in [
         "cut", "wound", "burn", "fracture", "broken", "break", "dislocated",
         "dislocation", "torn", "tear", "separated", "separation", "bleeding",
         "fall", "fell", "injury", "swollen", "sprain", "snapped", "toe", "finger",
-        "wrist", "ankle", "knee", "shoulder", "elbow", "bone",
+        "wrist", "ankle", "knee", "shoulder", "elbow", "bone", "bruise", "bleed",
+        "laceration", "gash", "stab", "puncture",
     ])
-    is_mental  = any(w in p for w in ["anxiety", "panic", "stress", "depression", "suicide", "self-harm", "mental"])
+    is_mental  = any(w in p for w in [
+        "anxiety", "panic", "stress", "depression", "suicide", "self-harm", "mental",
+        "mood", "sad", "hopeless", "worthless", "ptsd", "trauma", "phobia",
+    ])
+    is_skin    = any(w in p for w in [
+        "rash", "skin", "itch", "eczema", "psoriasis", "hives", "urticaria",
+        "blister", "abscess", "boil", "cellulitis", "dermatitis",
+    ])
+    is_eye     = any(w in p for w in [
+        "eye", "vision", "sight", "blind", "blurry", "floater", "flash", "glaucoma",
+        "conjunctivitis", "red eye",
+    ])
+    is_ear     = any(w in p for w in ["ear", "hearing", "tinnitus", "deaf", "otitis", "earache"])
+    is_uro     = any(w in p for w in [
+        "urinary", "urine", "bladder", "kidney", "pee", "painful urination",
+        "burning urination", "frequent urination", "uti",
+    ])
     is_appt    = any(w in p for w in ["appointment", "book", "schedule", "doctor", "clinic", "hospital"])
 
     # -- Appointment request --
@@ -427,6 +429,38 @@ def _build_response(prompt: str, severity: str, conf_pct: int = 0) -> str:
                 "• Elevate the injured area to help reduce swelling\n"
                 "• A pharmacist can advise on appropriate pain management and wound care products"
             )
+        elif is_skin:
+            advice = (
+                "A skin condition that is spreading, infected, or not responding to home care needs medical attention.\n\n"
+                "• Do not scratch or try to squeeze any infected areas\n"
+                "• Keep the area clean and dry\n"
+                "• Book an appointment with a doctor or clinic within 24–48 hours — some skin infections need antibiotics\n"
+                "• A pharmacist can advise on interim options and whether it looks like something urgent"
+            )
+        elif is_eye:
+            advice = (
+                "Eye symptoms that persist or are affecting your vision need prompt assessment.\n\n"
+                "• Avoid rubbing your eyes — this can worsen infection or injury\n"
+                "• If there is discharge, gently wipe outward with a clean damp cloth\n"
+                "• Book with a doctor or optometrist within 24 hours\n"
+                "• Go to emergency immediately if vision becomes suddenly blurry, you see flashing lights, or there's significant pain"
+            )
+        elif is_ear:
+            advice = (
+                "Ear pain or hearing changes that aren't resolving on their own should be checked by a doctor.\n\n"
+                "• Don't insert anything into the ear\n"
+                "• Book with a doctor within 24–48 hours — ear infections can worsen quickly\n"
+                "• A pharmacist can advise on pain management while you wait\n"
+                "• Go to an emergency room if pain becomes severe, you develop a fever, or notice swelling behind the ear"
+            )
+        elif is_uro:
+            advice = (
+                "Urinary symptoms with fever or pain may indicate a kidney infection or a UTI that needs treatment.\n\n"
+                "• Increase your fluid intake significantly\n"
+                "• Book with a doctor within 24 hours — urinary infections often require a prescription\n"
+                "• A pharmacist can test your urine with a dipstick and advise on next steps\n"
+                "• Go to emergency if you have severe back/loin pain, high fever, or can't pass urine at all"
+            )
         else:
             advice = (
                 "Your symptoms are worth having checked — don't leave them unaddressed.\n\n"
@@ -483,6 +517,38 @@ def _build_response(prompt: str, severity: str, conf_pct: int = 0) -> str:
             "• Cover with a clean plaster or bandage\n"
             "• A pharmacist can advise on antiseptic creams and wound care supplies\n"
             "• See a doctor if the area becomes increasingly red, warm, swollen, or starts to discharge"
+        )
+    elif is_skin:
+        advice = (
+            "Mild skin conditions like rashes, dry skin, or minor irritation can often be managed at home.\n\n"
+            "• Avoid scratching — this can cause infection\n"
+            "• Keep the area clean and moisturised\n"
+            "• A pharmacist can recommend suitable creams or antihistamines for itch relief\n"
+            "• See a doctor if the rash spreads rapidly, is accompanied by fever, or doesn't improve in 48 hours"
+        )
+    elif is_eye:
+        advice = (
+            "Mild eye discomfort or irritation is often caused by dryness, dust, or eye strain.\n\n"
+            "• Rinse the eye gently with clean water if something is in it\n"
+            "• Rest your eyes from screens regularly — the 20-20-20 rule (every 20 min, look 20 feet away for 20 seconds)\n"
+            "• A pharmacist can recommend lubricating eye drops\n"
+            "• See a doctor immediately if you have sudden vision loss, eye pain, or an eye injury"
+        )
+    elif is_ear:
+        advice = (
+            "Mild ear discomfort or blocked ears are common and often resolve on their own.\n\n"
+            "• Avoid inserting anything into the ear canal — no cotton buds\n"
+            "• Try swallowing, yawning, or chewing to help equalise pressure\n"
+            "• A pharmacist can advise on eardrops for mild blockage or discomfort\n"
+            "• See a doctor if pain is severe, you have hearing loss, or symptoms last more than 48 hours"
+        )
+    elif is_uro:
+        advice = (
+            "Mild urinary symptoms like slight frequency or mild discomfort can be early signs of a UTI or dehydration.\n\n"
+            "• Drink at least 2 litres of water today\n"
+            "• Avoid caffeine and alcohol which irritate the bladder\n"
+            "• A pharmacist can advise on UTI testing strips and available over-the-counter options\n"
+            "• See a doctor if you have fever, back pain, blood in urine, or symptoms don't improve in 24 hours"
         )
     else:
         advice = (

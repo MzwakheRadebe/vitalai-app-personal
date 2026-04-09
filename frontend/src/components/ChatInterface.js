@@ -1,24 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Paperclip, Calendar, RefreshCw } from 'lucide-react';
-import LanguageSelector from './LanguageSelector';
-import FileUpload from './FileUpload';
+import { Send, Bot, User, Calendar, RefreshCw } from 'lucide-react';
 import AppointmentScheduler from './AppointmentScheduler';
 import { chatAPI } from '../services/api';
 import './ChatInterface.css';
 
 // Quick symptom chips shown at the start
 const QUICK_SYMPTOMS = [
-  { label: '🤕 Headache', value: 'I have a headache' },
-  { label: '🌡️ Fever', value: 'I have a fever' },
-  { label: '😮‍💨 Chest Pain', value: 'I have chest pain and difficulty breathing' },
-  { label: '🤢 Nausea', value: 'I feel nauseous and have stomach pain' },
-  { label: '😮 Sore Throat', value: 'I have a sore throat and cough' },
-  { label: '🩹 Injury', value: 'I have an injury that needs assessment' },
+  { label: '🤕 Headache',        value: 'I have a headache' },
+  { label: '🌡️ Fever',           value: 'I have a fever' },
+  { label: '😮‍💨 Chest Pain',      value: 'I have chest pain and difficulty breathing' },
+  { label: '🤢 Nausea',          value: 'I feel nauseous and have stomach pain' },
+  { label: '😮 Sore Throat',     value: 'I have a sore throat and cough' },
+  { label: '🩹 Injury',          value: 'I have an injury that needs assessment' },
   { label: '📅 Book Appointment', value: 'I would like to schedule an appointment' },
-  { label: '💙 Mental Health', value: 'I am struggling with anxiety and stress' },
+  { label: '💙 Mental Health',   value: 'I am struggling with anxiety and stress' },
 ];
 
-// Map severity string → display config
+// Severity → display config
 const SEVERITY_CONFIG = {
   CRITICAL: { emoji: '🔴', color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
   HIGH:     { emoji: '🟠', color: '#ea580c', bg: '#fff7ed', border: '#fdba74' },
@@ -26,76 +24,61 @@ const SEVERITY_CONFIG = {
   LOW:      { emoji: '🟢', color: '#15803d', bg: '#f0fdf4', border: '#86efac' },
 };
 
-// Render message text — convert **bold** and newlines to JSX
-const RenderText = ({ text }) => {
-  const lines = text.split('\n');
-  return (
-    <div>
-      {lines.map((line, i) => {
-        // Bold **text**
-        const parts = line.split(/\*\*(.*?)\*\*/g);
-        const rendered = parts.map((part, j) =>
-          j % 2 === 1 ? <strong key={j}>{part}</strong> : part
-        );
-        return (
-          <p key={i} style={{ margin: line === '' ? '4px 0' : '2px 0', lineHeight: '1.55' }}>
-            {rendered}
-          </p>
-        );
-      })}
-    </div>
-  );
-};
+// Render **bold** markdown and newlines as JSX
+const RenderText = ({ text }) => (
+  <div>
+    {text.split('\n').map((line, i) => {
+      const parts = line.split(/\*\*(.*?)\*\*/g);
+      return (
+        <p key={i} style={{ margin: line === '' ? '4px 0' : '2px 0', lineHeight: '1.6' }}>
+          {parts.map((part, j) => j % 2 === 1 ? <strong key={j}>{part}</strong> : part)}
+        </p>
+      );
+    })}
+  </div>
+);
 
 const ChatInterface = () => {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      text: "Hello! I'm **VitalAI**, your medical triage assistant.\n\nDescribe your symptoms below and I'll assess their severity and advise on next steps. You can type freely or tap one of the quick options to get started.",
-      sender: 'bot',
-      timestamp: new Date(),
-      type: 'text',
-      showQuickSymptoms: true,
-    }
-  ]);
+  const [messages, setMessages] = useState([{
+    id: 1,
+    text: "Hello! I'm **VitalAI**, your medical triage assistant.\n\nDescribe your symptoms and I'll assess their severity and advise on the right next steps. Type freely or tap a quick option below to get started.",
+    sender: 'bot',
+    timestamp: new Date(),
+    type: 'text',
+    showQuickSymptoms: true,
+  }]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('en');
-  const [showFileUpload, setShowFileUpload] = useState(false);
   const [showAppointmentScheduler, setShowAppointmentScheduler] = useState(false);
   const messagesEndRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const sendMessage = async (text) => {
-    const messageText = text || inputText;
-    if (!messageText.trim() || isLoading) return;
+    const messageText = (text || inputText).trim();
+    if (!messageText || isLoading) return;
 
-    const userMessage = {
+    setMessages(prev => prev.map(m => ({ ...m, showQuickSymptoms: false })).concat({
       id: Date.now(),
       text: messageText,
       sender: 'user',
       timestamp: new Date(),
       type: 'text',
-    };
-
-    setMessages(prev => prev.map(m => ({ ...m, showQuickSymptoms: false })).concat(userMessage));
+    }));
     setInputText('');
     setIsLoading(true);
 
     try {
-      const data = await chatAPI.sendMessage(messageText, selectedLanguage);
+      const data = await chatAPI.sendMessage(messageText);
       const reply = data.reply || 'Sorry, I could not process that. Please try again.';
       const severityKey = (data.severity || '').toUpperCase();
-      const severity = SEVERITY_CONFIG[severityKey] ? { level: severityKey, ...SEVERITY_CONFIG[severityKey] } : null;
+      const severity = SEVERITY_CONFIG[severityKey]
+        ? { level: severityKey, ...SEVERITY_CONFIG[severityKey] }
+        : null;
 
-      const botMessage = {
+      setMessages(prev => [...prev, {
         id: Date.now() + 1,
         text: reply,
         sender: 'bot',
@@ -103,8 +86,7 @@ const ChatInterface = () => {
         type: 'text',
         severity,
         confidence: data.confidence || 0,
-      };
-      setMessages(prev => [...prev, botMessage]);
+      }]);
     } catch {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
@@ -118,21 +100,10 @@ const ChatInterface = () => {
     }
   };
 
-  const handleFileUpload = (file) => {
-    setMessages(prev => [...prev, {
-      id: Date.now(),
-      text: `Uploaded: ${file.name}`,
-      sender: 'user',
-      timestamp: new Date(),
-      type: 'file',
-    }]);
-    setShowFileUpload(false);
-  };
-
   const handleAppointmentSchedule = (data) => {
     setMessages(prev => [...prev, {
       id: Date.now(),
-      text: `✅ Appointment booked — ${data.department} on ${data.date} at ${data.time}`,
+      text: `✅ Appointment requested — ${data.department} on ${data.date} at ${data.time}.\n\nYou will receive a confirmation from the clinic.`,
       sender: 'bot',
       timestamp: new Date(),
       type: 'appointment',
@@ -143,7 +114,7 @@ const ChatInterface = () => {
   const handleReset = () => {
     setMessages([{
       id: Date.now(),
-      text: "Hello again! Tell me your symptoms and I'll help assess them.\n\nOr tap one of the quick options below.",
+      text: "New session started. Tell me your symptoms and I'll help assess them.\n\nOr tap a quick option below.",
       sender: 'bot',
       timestamp: new Date(),
       type: 'text',
@@ -154,6 +125,7 @@ const ChatInterface = () => {
 
   return (
     <div className="vitalai-chat">
+
       {/* Header */}
       <div className="chat-header">
         <div className="header-left">
@@ -163,16 +135,17 @@ const ChatInterface = () => {
             <span className="status">● Online · Medical Triage Assistant</span>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <LanguageSelector selectedLanguage={selectedLanguage} onLanguageChange={setSelectedLanguage} />
-          <button
-            onClick={handleReset}
-            title="Start new session"
-            style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '5px 8px', cursor: 'pointer', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
-          >
-            <RefreshCw size={13} /> New
-          </button>
-        </div>
+        <button
+          onClick={handleReset}
+          title="Start new session"
+          style={{
+            background: 'none', border: '1px solid #e5e7eb', borderRadius: '6px',
+            padding: '5px 10px', cursor: 'pointer', color: '#6b7280',
+            display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px',
+          }}
+        >
+          <RefreshCw size={13} /> New Session
+        </button>
       </div>
 
       {/* Messages */}
@@ -191,29 +164,29 @@ const ChatInterface = () => {
                   background: message.severity.bg,
                   border: `1px solid ${message.severity.border}`,
                   color: message.severity.color,
-                  borderRadius: '20px',
-                  padding: '4px 12px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  marginBottom: '10px',
+                  borderRadius: '20px', padding: '4px 12px',
+                  fontSize: '12px', fontWeight: 700, marginBottom: '10px',
                 }}>
                   {message.severity.emoji} {message.severity.level}
                   {message.confidence > 0 && (
-                    <span style={{ fontWeight: 400, opacity: 0.75 }}>· {message.confidence}% confidence</span>
+                    <span style={{ fontWeight: 400, opacity: 0.7 }}>
+                      · {message.confidence}% confidence
+                    </span>
                   )}
                 </div>
               )}
 
               {/* Message body */}
-              {message.type === 'file' ? (
-                <div className="file-message"><Paperclip size={14} /> <span>{message.text}</span></div>
-              ) : message.type === 'appointment' ? (
-                <div className="appointment-message"><Calendar size={14} /> <span>{message.text}</span></div>
+              {message.type === 'appointment' ? (
+                <div className="appointment-message">
+                  <Calendar size={14} />
+                  <RenderText text={message.text} />
+                </div>
               ) : (
                 <RenderText text={message.text} />
               )}
 
-              {/* Quick symptom chips on welcome message */}
+              {/* Quick symptom chips */}
               {message.showQuickSymptoms && (
                 <div style={{ marginTop: '14px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                   {QUICK_SYMPTOMS.map((s) => (
@@ -224,10 +197,10 @@ const ChatInterface = () => {
                         background: '#f0f4ff', border: '1px solid #c7d2fe',
                         borderRadius: '20px', padding: '6px 14px',
                         fontSize: '13px', cursor: 'pointer', color: '#4338ca',
-                        fontWeight: 500, transition: 'all 0.15s',
+                        fontWeight: 500, transition: 'background 0.15s',
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#e0e7ff'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = '#f0f4ff'; }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#e0e7ff'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#f0f4ff'}
                     >
                       {s.label}
                     </button>
@@ -260,16 +233,10 @@ const ChatInterface = () => {
         <button className="quick-action-btn" onClick={() => setShowAppointmentScheduler(true)}>
           <Calendar size={15} /> Schedule Appointment
         </button>
-        <button className="quick-action-btn" onClick={() => setShowFileUpload(true)}>
-          <Paperclip size={15} /> Upload Document
-        </button>
       </div>
 
       {/* Input */}
       <div className="input-area">
-        <button className="attachment-btn" onClick={() => setShowFileUpload(true)} title="Upload document">
-          <Paperclip size={17} />
-        </button>
         <input
           type="text"
           value={inputText}
@@ -278,14 +245,22 @@ const ChatInterface = () => {
           placeholder="Describe your symptoms…"
           disabled={isLoading}
         />
-        <button onClick={() => sendMessage()} disabled={!inputText.trim() || isLoading} className="send-button">
+        <button
+          onClick={() => sendMessage()}
+          disabled={!inputText.trim() || isLoading}
+          className="send-button"
+        >
           <Send size={17} />
         </button>
       </div>
 
-      {/* Modals */}
-      {showFileUpload && <FileUpload onFileUpload={handleFileUpload} onClose={() => setShowFileUpload(false)} />}
-      {showAppointmentScheduler && <AppointmentScheduler onSchedule={handleAppointmentSchedule} onClose={() => setShowAppointmentScheduler(false)} />}
+      {/* Appointment modal */}
+      {showAppointmentScheduler && (
+        <AppointmentScheduler
+          onSchedule={handleAppointmentSchedule}
+          onClose={() => setShowAppointmentScheduler(false)}
+        />
+      )}
     </div>
   );
 };
