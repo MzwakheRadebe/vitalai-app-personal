@@ -60,3 +60,26 @@
 2025-10-28 12:56:12,035 - Load pretrained SentenceTransformer: embedder_model
 2025-10-28 15:56:09,752 - Use pytorch device_name: cpu
 2025-10-28 15:56:09,752 - Load pretrained SentenceTransformer: embedder_model
+2026-04-09 13:33:54,212 - Use pytorch device_name: cpu
+2026-04-09 13:33:54,213 - Load pretrained SentenceTransformer: embedder_model
+2026-04-09 13:36:14,252 - Input: headache | Prediction: LOW | Confidence: 0.44
+2026-04-09 13:36:38,297 - Input: cough | Prediction: LOW | Confidence: 0.59
+2026-04-09 13:37:22,600 - Input: fatigue | Prediction: LOW | Confidence: 0.57
+2026-04-09 13:45:49,709 - Input: I have an injury that needs assessment | Prediction: MEDIUM | Confidence: 0.37
+2026-04-09 13:46:20,661 - Input: Are the symptoms getting worse? | Prediction: HIGH | Confidence: 0.50
+2026-04-09 13:46:44,960 - Input: I am struggling with anxiety and stress | Prediction: MEDIUM | Confidence: 0.47
+2026-04-09 13:47:01,837 - Input: I have a headache | Prediction: LOW | Confidence: 0.44
+2026-04-09 13:47:28,633 - Input: I feel nauseous and have stomach pain | Prediction: MEDIUM | Confidence: 0.41
+2026-04-09 13:51:57,699 - Input: broken toe | Prediction: MEDIUM | Confidence: 0.43
+2026-04-09 13:54:58,357 - Input: How long have you had these symptoms? | Prediction: LOW | Confidence: 0.35
+2026-04-09 13:55:06,722 - Input: I have a sore throat and cough | Prediction: LOW | Confidence: 0.55
+2026-04-09 14:02:42,672 - Input: broken toe | Prediction: MEDIUM | Confidence: 0.43
+2026-04-09 14:03:57,948 - Input: headache | Prediction: LOW | Confidence: 0.44
+2026-04-09 14:43:49,168 - Use pytorch device_name: cpu
+2026-04-09 14:43:49,168 - Load pretrained SentenceTransformer: embedder_model
+2026-04-09 18:54:37,636 - Use pytorch device_name: cpu
+2026-04-09 18:54:37,636 - Load pretrained SentenceTransformer: C:\Users\mzwak\VitalAI-App\ai_and_nlp\embedder_model
+2026-04-09 18:54:53,510 - Use pytorch device_name: cpu
+2026-04-09 18:54:53,510 - Load pretrained SentenceTransformer: C:\Users\mzwak\VitalAI-App\ai_and_nlp\embedder_model
+2026-04-09 18:55:30,381 - Use pytorch device_name: cpu
+2026-04-09 18:55:30,382 - Load pretrained SentenceTransformer: C:\Users\mzwak\VitalAI-App\ai_and_nlp\embedder_model
