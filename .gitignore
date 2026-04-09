@@ -28,5 +28,17 @@ dataSources.local.xml
 .vscode/
 .DS_Store
 
-# Node (if frontend added later)
+# Node
 node_modules/
+frontend/build/
+
+# Frontend environment files (contain API URLs, never commit production URLs)
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+frontend/.env.development
+!frontend/.env.example
+
+# ML model artifacts (large binary files — regenerated on first start)
+ai_and_nlp/severity_classifier.joblib
+ai_and_nlp/embedder_model/

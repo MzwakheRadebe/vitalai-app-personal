@@ -528,51 +528,22 @@ HIGH_KEYWORDS: list[str] = [
 ]
 
 MEDIUM_KEYWORDS: list[str] = [
-    # Head
-    "persistent headache", "recurring headache", "migraine",
-    "headache not going away", "headache for days",
-    "dizziness", "vertigo", "lightheaded",
-    # Respiratory
-    "persistent cough", "cough for weeks", "coughing up phlegm",
-    "yellow phlegm", "green phlegm", "productive cough",
-    "shortness of breath when walking", "breathless on stairs",
-    # GI
-    "nausea for days", "vomiting for 24 hours", "abdominal pain",
-    "stomach pain", "diarrhoea and vomiting", "blood in stool",
-    "rectal bleeding", "black stool", "heartburn not improving",
-    "weight loss unexplained",
-    # Skin
-    "infected wound", "wound not healing", "cellulitis",
-    "spreading rash", "shingles",
-    # Fever
-    "fever two days", "fever 48 hours", "fever won't break",
-    "fever and rash",
-    # Musculoskeletal
-    "sprain swollen", "can't put weight on", "back pain severe",
-    "muscle tear", "joint swollen",
-    # Mental health
-    "panic attacks", "severe anxiety", "depression", "low mood weeks",
-    # ENT
-    "ear pain", "ear infection", "sinusitis", "tonsillitis",
-    # Reproductive
-    "urinary infection fever", "uti fever", "pelvic pain",
-    "vaginal discharge infection",
-    # Other
-    "jaundice", "yellow skin", "yellow eyes", "new lump", "new mass",
-]
-
-
-MEDIUM_KEYWORDS: list[str] = [
     # Breathing — any mention is at minimum MEDIUM
     "breathing", "breath", "breathe", "inhale", "exhale", "respiratory",
     "shortness of breath", "short of breath", "breathless", "breathlessness",
     "difficulty breathing", "trouble breathing", "hard to breathe",
     "winded", "out of breath",
+    "persistent cough", "cough for weeks", "coughing up phlegm",
+    "yellow phlegm", "green phlegm", "productive cough",
+    "shortness of breath when walking", "breathless on stairs",
     # Vision / sight — always needs a doctor
     "vision", "sight", "seeing", "eyesight",
     "blurry", "blurred", "double vision", "floaters", "flashes",
     "can't see", "cannot see", "trouble seeing", "difficulty seeing",
-    # Chest
+    # Head
+    "persistent headache", "recurring headache", "migraine",
+    "headache not going away", "headache for days",
+    # Chest / heart
     "chest", "palpitation", "palpitations", "heart racing", "heart pounding",
     "irregular heartbeat", "heart flutter",
     # Neurological
@@ -580,24 +551,40 @@ MEDIUM_KEYWORDS: list[str] = [
     "numbness", "tingling", "weakness", "confusion", "memory loss",
     # Fever
     "fever", "high temperature",
+    "fever two days", "fever 48 hours", "fever won't break", "fever and rash",
     # Serious pain
     "severe", "unbearable", "excruciating", "worst pain",
+    # GI
+    "nausea for days", "vomiting for 24 hours", "abdominal pain",
+    "stomach pain", "diarrhoea and vomiting", "heartburn not improving",
+    "weight loss unexplained",
     # Bleeding
     "blood in stool", "rectal bleeding", "blood in urine", "blood when urinating",
-    # Infection
-    "infection", "cellulitis",
+    "vomiting blood", "coughing blood",
+    # Skin / infection
+    "infection", "cellulitis", "infected wound", "wound not healing",
+    "spreading rash", "shingles",
     # Swelling
     "swollen", "swelling",
-    # Skin
+    # Skin / eyes
     "rash with fever", "jaundice", "yellow skin", "yellow eyes",
+    # Musculoskeletal
+    "sprain swollen", "can't put weight on", "back pain severe",
+    "muscle tear", "joint swollen",
     # Mental health
-    "suicidal thoughts", "self harm", "self-harm", "depression", "panic attack",
+    "suicidal thoughts", "self harm", "self-harm", "depression",
+    "panic attack", "panic attacks", "severe anxiety", "low mood weeks",
+    # ENT
+    "ear pain", "ear infection", "sinusitis", "tonsillitis",
+    # Reproductive / urological
+    "urinary infection fever", "uti fever", "pelvic pain",
+    "vaginal discharge infection",
     # Paediatric
     "baby sick", "infant sick", "child fever",
     # Sudden onset — always worth checking
     "sudden", "suddenly",
-    # Abdomen
-    "vomiting blood", "coughing blood",
+    # Other
+    "new lump", "new mass",
 ]
 
 

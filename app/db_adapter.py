@@ -1,55 +1,25 @@
 """
-Database adapter providing a unified async interface for SQLite and MySQL.
+Database adapter providing a unified async interface for PostgreSQL and SQLite.
 
-- Uses `aiosqlite` for local development (SQLite)
-- Uses `aiomysql` for MySQL when `Settings.mysql_url` is configured
-- Accepts SQL with `?` placeholders; translates to `%s` for MySQL automatically
-- Exposes simple `fetchone`, `fetchall`, `execute`, `executemany`, `insert`, `commit`
-
-This lets route handlers remain mostly database-agnostic.
+- Uses asyncpg for PostgreSQL (production / Supabase)
+- Uses aiosqlite for SQLite (local development)
+- Accepts SQL with `?` placeholders; translates to `$1, $2...` for PostgreSQL
+- Exposes simple fetchone, fetchall, execute, executemany, insert, commit
 """
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from typing import Any, Iterable, Optional
-from urllib.parse import urlparse
 
 import aiosqlite
-import aiomysql
 
-from .config import get_settings
-
-
-def _parse_mysql_url(url: str) -> dict[str, Any]:
-    """Parse a SQLAlchemy-style MySQL URL into connection kwargs for aiomysql.
-
-    Supports schemes like `mysql+pymysql://user:pass@host:port/db` or
-    `mysql+aiomysql://user:pass@host:port/db`. We normalize to `mysql://` for
-    parsing and return dict with keys: host, port, user, password, db.
-    """
-    if not url:
-        raise ValueError("MySQL URL is empty")
-    normalized = url.replace("mysql+pymysql://", "mysql://").replace("mysql+aiomysql://", "mysql://")
-    parsed = urlparse(normalized)
-    return {
-        "host": parsed.hostname or "localhost",
-        "port": parsed.port or 3306,
-        "user": parsed.username or "",
-        "password": parsed.password or "",
-        "db": (parsed.path or "/").lstrip("/") or "",
-        "autocommit": False,
-        "charset": "utf8mb4",
-    }
+from app.config import get_settings
 
 
 class SQLiteConnection:
-    """Async SQLite wrapper providing a unified interface for FastAPI routes.
-
-    Returns tuple rows; route code maps to dicts for responses.
-    """
+    """Async SQLite wrapper."""
     def __init__(self, conn: aiosqlite.Connection):
         self.conn = conn
-        # tuple-like rows by default; route code converts explicitly
 
     async def fetchone(self, sql: str, params: Iterable[Any] = ()) -> Optional[tuple]:
         async with self.conn.execute(sql, tuple(params)) as cur:
@@ -76,70 +46,69 @@ class SQLiteConnection:
         await self.conn.close()
 
 
-class MySQLConnection:
-    """Async MySQL wrapper normalizing SQLite-style `?` placeholders to `%s`.
-
-    Exposes fetchone, fetchall, execute, executemany, insert, commit, close.
-    """
-    def __init__(self, conn: aiomysql.Connection):
+class PostgresConnection:
+    """Async PostgreSQL wrapper normalizing SQLite `?` placeholders to `$1, $2...`"""
+    def __init__(self, conn):
         self.conn = conn
 
     @staticmethod
     def _conv(sql: str) -> str:
-        # replace SQLite-style placeholders with MySQL `%s`
-        return sql.replace("?", "%s")
+        """Convert ? placeholders to $1, $2... for asyncpg."""
+        result = []
+        count = 0
+        for ch in sql:
+            if ch == "?":
+                count += 1
+                result.append(f"${count}")
+            else:
+                result.append(ch)
+        return "".join(result)
 
     async def fetchone(self, sql: str, params: Iterable[Any] = ()) -> Optional[tuple]:
-        async with self.conn.cursor() as cur:
-            await cur.execute(self._conv(sql), tuple(params))
-            return await cur.fetchone()
+        row = await self.conn.fetchrow(self._conv(sql), *tuple(params))
+        return tuple(row.values()) if row else None
 
     async def fetchall(self, sql: str, params: Iterable[Any] = ()) -> list[tuple]:
-        async with self.conn.cursor() as cur:
-            await cur.execute(self._conv(sql), tuple(params))
-            return await cur.fetchall()
+        rows = await self.conn.fetch(self._conv(sql), *tuple(params))
+        return [tuple(r.values()) for r in rows]
 
     async def execute(self, sql: str, params: Iterable[Any] = ()) -> None:
-        async with self.conn.cursor() as cur:
-            await cur.execute(self._conv(sql), tuple(params))
+        await self.conn.execute(self._conv(sql), *tuple(params))
 
     async def executemany(self, sql: str, seq_params: Iterable[Iterable[Any]]) -> None:
-        async with self.conn.cursor() as cur:
-            await cur.executemany(self._conv(sql), list(map(tuple, seq_params)))
+        converted = self._conv(sql)
+        await self.conn.executemany(converted, [tuple(p) for p in seq_params])
 
     async def insert(self, sql: str, params: Iterable[Any] = ()) -> int:
-        async with self.conn.cursor() as cur:
-            await cur.execute(self._conv(sql), tuple(params))
-            return cur.lastrowid or 0
+        # For PostgreSQL, append RETURNING id to get the new row id
+        returning_sql = self._conv(sql)
+        if "returning" not in returning_sql.lower():
+            returning_sql += " RETURNING id"
+        row = await self.conn.fetchrow(returning_sql, *tuple(params))
+        return row["id"] if row else 0
 
     async def commit(self) -> None:
-        await self.conn.commit()
+        pass  # asyncpg uses auto-commit by default per statement
 
     async def close(self) -> None:
-        self.conn.close()
+        await self.conn.close()
 
 
 @asynccontextmanager
 async def get_db():
-    """Yield an async DB connection (MySQL when configured, otherwise SQLite).
+    """Yield an async DB connection.
 
-    Selection:
-    - When `Settings.mysql_url` is non-empty and starts with `mysql`, use aiomysql.
-    - Otherwise, use aiosqlite at `Settings.sqlite_path`.
-
-    Behavior:
-    - Provides a thin wrapper (`MySQLConnection` or `SQLiteConnection`) with consistent API.
-    - MySQL mode converts `?` placeholders to `%s` automatically.
-    - Connections are closed after the context exits.
+    Uses PostgreSQL (asyncpg) when DATABASE_URL is set, otherwise SQLite.
     """
     settings = get_settings()
-    mysql_url = (settings.mysql_url or "").strip()
-    use_mysql = mysql_url.lower().startswith("mysql")
 
-    if use_mysql:
-        kwargs = _parse_mysql_url(mysql_url)
-        conn = await aiomysql.connect(**kwargs)
-        wrapper = MySQLConnection(conn)
+    if settings.database_url:
+        try:
+            import asyncpg
+        except ImportError:
+            raise RuntimeError("asyncpg not installed. Run: pip install asyncpg")
+        conn = await asyncpg.connect(settings.database_url)
+        wrapper = PostgresConnection(conn)
         try:
             yield wrapper
         finally:

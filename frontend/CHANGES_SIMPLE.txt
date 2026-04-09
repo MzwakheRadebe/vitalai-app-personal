@@ -1,0 +1,51 @@
+VitalAI Frontend – Simple Changes Summary
+
+What Changed
+- Login now calls the backend and saves a token
+- Register page added for creating accounts
+- Global auth state remembers who is logged in
+- Error messages show real server details (e.g., 401, 404)
+- Home “Sign up” opens a register form instead of going back
+- Route /register is available for direct access
+- Header shows UI version and backend URL so you know which environment you are using
+
+Where It Lives
+- Login: frontend/src/components/Login.js
+- Register: frontend/src/components/Register.js
+- Auth client & base URL: frontend/src/services/api.js
+- Global auth state: frontend/src/contexts/AuthContext.js
+- Home view switching: frontend/src/pages/Home.js
+- Routes: frontend/src/App.js
+- Version badge style: frontend/src/pages/Home.css
+- Environment file: frontend/.env
+
+How Login Works (simple)
+1) You type email + password and press Sign in
+2) The app calls POST /api/auth/login on the backend
+3) If successful: it saves a token, marks you as logged in, and moves you to chat
+4) If something fails: you see a clear message from the server
+
+How Sign Up Works (simple)
+1) Click “Sign up” on the login page or open /register
+2) Enter email, password, confirm password, and choose patient or staff
+3) The app calls POST /api/auth/register
+4) On success you are sent back to login to sign in
+
+What URLs Are Used
+- UI (website): http://localhost:3000
+- Backend API (auth): http://localhost:8000 (shown in the header badge)
+
+Set Backend URL
+- Open frontend/.env
+- Set REACT_APP_API_URL to your backend address, e.g.
+  REACT_APP_API_URL=http://localhost:8000
+
+Run The UI
+- In c:\Users\mzwak\VitalAI-App\frontend
+- npm install
+- npm run react
+- Open http://localhost:3000 in the browser
+
+Notes
+- If port 3000 is busy, the dev server may open on another port (e.g., 3004). Use the “Local:” URL printed in the terminal.
+- Chat uses its own endpoint and stays unchanged. Auth changes do not affect AI service files.

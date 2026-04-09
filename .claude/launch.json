@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "VitalAI Backend (FastAPI)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--reload", "--port", "8000"],
+      "port": 8000,
+      "cwd": "/c/Users/mzwak/VitalAI-App"
+    },
+    {
+      "name": "VitalAI Frontend (React)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "react"],
+      "port": 3000,
+      "cwd": "/c/Users/mzwak/VitalAI-App/frontend"
+    }
+  ]
+}

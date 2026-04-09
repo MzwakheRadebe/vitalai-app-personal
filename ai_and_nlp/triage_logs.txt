@@ -83,3 +83,5 @@
 2026-04-09 18:54:53,510 - Load pretrained SentenceTransformer: C:\Users\mzwak\VitalAI-App\ai_and_nlp\embedder_model
 2026-04-09 18:55:30,381 - Use pytorch device_name: cpu
 2026-04-09 18:55:30,382 - Load pretrained SentenceTransformer: C:\Users\mzwak\VitalAI-App\ai_and_nlp\embedder_model
+2026-04-09 18:56:53,575 - Use pytorch device_name: cpu
+2026-04-09 18:56:53,575 - Load pretrained SentenceTransformer: C:\Users\mzwak\VitalAI-App\ai_and_nlp\embedder_model

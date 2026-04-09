@@ -4,6 +4,8 @@ Handles user registration, login, and token verification.
 Users are persisted in the database (PostgreSQL or SQLite).
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel, Field, EmailStr
 
@@ -16,9 +18,8 @@ from app.security import (
 )
 from app.config import get_settings
 
-
 router = APIRouter(prefix="/auth")
-
+logger = logging.getLogger("auth")
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -26,18 +27,23 @@ router = APIRouter(prefix="/auth")
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6, max_length=128)
+    # Minimum 8 chars, at least one letter and one digit (OWASP recommendation)
+    password: str = Field(
+        min_length=8, max_length=128,
+        description="Min 8 characters with at least one letter and one digit"
+    )
     role: str = Field(default="patient")
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6, max_length=128)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    role: str = "patient"  # Returned so frontend can set role-based routing
 
 
 class UserResponse(BaseModel):
@@ -125,10 +131,13 @@ async def login(req: LoginRequest):
     user = await _get_user(email)
 
     if not user or not verify_password(req.password, user["password_hash"]):
+        logger.warning("Failed login attempt for email: %s", email)
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    token = create_access_token(subject=email, role=user.get("role", "patient"))
-    return TokenResponse(access_token=token)
+    role = user.get("role", "patient")
+    token = create_access_token(subject=email, role=role)
+    logger.info("User logged in: %s (role=%s)", email, role)
+    return TokenResponse(access_token=token, role=role)
 
 
 @router.get("/me", response_model=UserResponse)

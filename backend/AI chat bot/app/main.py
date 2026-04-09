@@ -46,29 +46,18 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
 # Ensure DB tables exist at startup (simple bootstrap for local dev)
 @app.on_event("startup")
 async def on_startup():
-    """Validate config and initialize DB tables on startup."""
-    # Fail fast in production if required env vars are missing
-    if settings.env == "production":
-        missing = []
-        if not settings.jwt_secret:
-            missing.append("JWT_SECRET")
-        if not settings.database_url:
-            missing.append("DATABASE_URL")
-        if not settings.allowed_origins or settings.allowed_origins == "*":
-            missing.append("ALLOWED_ORIGINS (must not be * in production)")
-        if missing:
-            raise RuntimeError(
-                f"Missing required environment variables for production: {', '.join(missing)}\n"
-                "Set these in your Render dashboard before deploying."
-            )
+    """Create required SQLite tables if they don't exist yet.
+
+    Keeps onboarding easy and avoids separate migration steps initially.
+    """
     await init_db()
 
 
