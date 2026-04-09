@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { 
   BarChart3, Users, Calendar, FileText, MessageCircle, 
   Settings, LogOut, Bell, Search, Filter,
-  TrendingUp, Clock, AlertTriangle, Download,
-  Eye, Edit, Trash2, MoreVertical
+  TrendingUp, Download,
+  MoreVertical
 } from 'lucide-react';
 import './AdminDashboard.css';
 

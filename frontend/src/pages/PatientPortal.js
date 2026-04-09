@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   User, Calendar, FileText, MessageCircle, History, Settings, LogOut, 
   Bell, Plus, Download, Clock, MapPin, Stethoscope, AlertCircle,
-  Heart, Pill, Activity, Shield
+  Heart, Pill, Activity
 } from 'lucide-react';
 import ChatInterface from '../components/ChatInterface';
 import AppointmentScheduler from '../components/AppointmentScheduler';
