@@ -156,9 +156,8 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
 async def _call_ml_model(prompt: str, settings) -> str | None:
     """Call the team's trained ML triage model at /predict.
 
-    The ML model (ai_and_nlp/non_final_draft.py) runs separately on port 5000
-    and returns { predicted_severity, confidence }.
-    We format that into a user-friendly reply.
+    Returns a symptom-aware, severity-specific response built from
+    the ML model's predicted_severity + the user's actual symptoms.
     """
     ml_url = getattr(settings, "ml_model_url", None) or "http://localhost:5000"
     try:
@@ -171,85 +170,257 @@ async def _call_ml_model(prompt: str, settings) -> str | None:
         confidence = data.get("confidence", 0)
         conf_pct = int(confidence * 100)
 
-        severity_map = {
-            "LOW": (
-                "🟢 LOW severity",
-                "Your symptoms appear mild. Monitor at home and rest.",
-                "• Rest and stay hydrated\n• Monitor symptoms over the next 24–48 hours\n• Visit a clinic if symptoms worsen or persist"
-            ),
-            "MEDIUM": (
-                "🟡 MEDIUM severity",
-                "Your symptoms may need medical attention.",
-                "• Book an appointment with a doctor soon\n• Use the 'Schedule Appointment' button below\n• Avoid strenuous activity until reviewed"
-            ),
-            "HIGH": (
-                "🟠 HIGH severity",
-                "Your symptoms suggest you need urgent medical attention.",
-                "• Visit your nearest clinic or hospital today\n• Do not delay — bring your ID and any current medication\n• Call a friend or family member to accompany you"
-            ),
-            "CRITICAL": (
-                "🔴 CRITICAL — Medical Emergency",
-                "Your symptoms indicate a potentially life-threatening condition.",
-                "• Call emergency services immediately: 10177 or 112\n• Do not drive yourself\n• Stay calm and wait for emergency responders"
-            ),
-        }
-
-        if severity not in severity_map:
+        if severity not in ("LOW", "MEDIUM", "HIGH", "CRITICAL"):
             return None
 
-        label, summary, steps = severity_map[severity]
-        return (
-            f"{label} (confidence: {conf_pct}%)\n\n"
-            f"{summary}\n\n"
-            f"Recommended steps:\n{steps}\n\n"
-            "⚠️ VitalAI is an AI-powered assistant and does not replace professional medical advice. "
-            "Always consult a qualified healthcare provider for diagnosis and treatment."
-        )
+        return _build_response(prompt, severity, conf_pct)
     except Exception:
         return None
 
 
-def _keyword_triage(prompt: str) -> str:
-    """Last-resort keyword fallback when both AI and ML model are unavailable."""
+def _build_response(prompt: str, severity: str, conf_pct: int = 0) -> str:
+    """Build a symptom-aware, human-sounding triage response.
+
+    Detects the symptom type from the user's message and tailors
+    the advice to match — so headache advice differs from chest pain advice.
+    """
     p = prompt.lower()
 
-    if any(w in p for w in ["chest pain", "heart attack", "can't breathe", "stroke", "unconscious", "faint"]):
+    # -- Detect symptom category --
+    is_head    = any(w in p for w in ["headache", "migraine", "head", "forehead", "temple"])
+    is_chest   = any(w in p for w in ["chest", "heart", "palpitation", "breathing", "breath", "inhale", "exhale"])
+    is_fever   = any(w in p for w in ["fever", "temperature", "chills", "sweating", "hot"])
+    is_stomach = any(w in p for w in ["stomach", "nausea", "vomit", "diarrhea", "abdomen", "bloat", "cramp", "bowel"])
+    is_throat  = any(w in p for w in ["throat", "swallow", "tonsil", "hoarse", "voice"])
+    is_cough   = any(w in p for w in ["cough", "wheeze", "phlegm", "mucus", "congestion"])
+    is_injury  = any(w in p for w in ["cut", "wound", "burn", "fracture", "broken", "bleeding", "fall", "injury", "swollen"])
+    is_mental  = any(w in p for w in ["anxiety", "panic", "stress", "depression", "suicide", "self-harm", "mental"])
+    is_appt    = any(w in p for w in ["appointment", "book", "schedule", "doctor", "clinic", "hospital"])
+
+    conf_str = f" (model confidence: {conf_pct}%)" if conf_pct else ""
+
+    # -- Appointment request (any severity) --
+    if is_appt:
         return (
-            "🔴 CRITICAL — This sounds like a medical emergency.\n\n"
-            "Please call emergency services (10177 or 112) immediately or go to your nearest emergency room.\n\n"
-            "Do not drive yourself. Stay calm and wait for help.\n\n"
-            "⚠️ VitalAI is an AI-powered assistant and does not replace professional medical advice."
+            "📅 I can help you book an appointment.\n\n"
+            "Click the **Schedule Appointment** button below to choose your preferred department, date, and time slot.\n\n"
+            "Departments available: General Practice · Cardiology · Paediatrics · ENT · Orthopaedics · Mental Health · Gynaecology\n\n"
+            "If this is an emergency, please call **10177** or **112** instead of booking."
         )
-    if any(w in p for w in ["severe", "vomiting blood", "bleeding", "fracture", "seizure", "collapse"]):
+
+    # -- Mental health (handle sensitively regardless of severity) --
+    if is_mental:
         return (
-            "🟠 HIGH severity detected.\n\n"
-            "Your symptoms suggest you need urgent medical attention.\n\n"
-            "• Visit your nearest clinic or hospital today\n"
-            "• Do not wait if symptoms worsen\n"
-            "• Bring your ID and any current medication\n\n"
-            "⚠️ VitalAI is an AI-powered assistant and does not replace professional medical advice."
+            "💙 I hear you, and I want you to know your feelings are valid.\n\n"
+            f"Severity assessment: **{severity}**{conf_str}\n\n"
+            "Please reach out for support:\n"
+            "• **SADAG Helpline:** 0800 456 789 (free, 24/7)\n"
+            "• **Lifeline SA:** 0861 322 322\n"
+            "• Talk to a trusted person — a friend, family member, or counsellor\n"
+            "• Book a session with a mental health professional via the Schedule Appointment button\n\n"
+            "You are not alone. ⚠️ VitalAI does not replace professional mental health care."
         )
-    if any(w in p for w in ["fever", "headache", "pain", "sore throat", "cough", "nausea", "dizzy", "fatigue", "flu"]):
+
+    # -- CRITICAL --
+    if severity == "CRITICAL":
+        if is_chest:
+            detail = "Chest-related symptoms at this severity level could indicate a heart attack, pulmonary embolism, or severe respiratory failure."
+        elif is_head:
+            detail = "Severe head symptoms can signal a stroke, brain bleed, or dangerous spike in blood pressure."
+        elif is_injury:
+            detail = "The injury you've described may involve serious blood loss or internal damage."
+        else:
+            detail = "Your symptoms suggest a potentially life-threatening condition that needs immediate evaluation."
+
         return (
-            "🟡 MEDIUM severity.\n\n"
-            "Your symptoms are worth monitoring and may need medical attention.\n\n"
-            "• Rest and stay hydrated\n"
-            "• Monitor your temperature if you have a fever\n"
-            "• Book a doctor's appointment if symptoms persist beyond 2 days\n"
-            "• Use the 'Schedule Appointment' button below to book\n\n"
-            "⚠️ VitalAI is an AI-powered assistant and does not replace professional medical advice."
+            f"🔴 CRITICAL — Seek Emergency Care Now{conf_str}\n\n"
+            f"{detail}\n\n"
+            "**Do this right now:**\n"
+            "• Call **10177** (ambulance) or **112** (emergency) immediately\n"
+            "• Do NOT drive yourself — call someone or wait for emergency services\n"
+            "• If you are alone, unlock your front door so paramedics can enter\n"
+            "• Stay as calm and still as possible\n\n"
+            "⚠️ VitalAI is an AI-powered assistant. This is not a substitute for emergency medical care."
         )
-    if any(w in p for w in ["appointment", "book", "schedule", "doctor", "clinic", "hospital"]):
+
+    # -- HIGH --
+    if severity == "HIGH":
+        if is_chest:
+            advice = (
+                "Chest tightness, pressure, or pain — especially with shortness of breath — needs same-day evaluation.\n\n"
+                "• Go to your nearest hospital or emergency clinic today\n"
+                "• Do not ignore this or wait to see if it passes\n"
+                "• Avoid physical exertion until you've been assessed\n"
+                "• If pain intensifies or spreads to your arm or jaw, call 10177 immediately"
+            )
+        elif is_head:
+            advice = (
+                "A severe or rapidly worsening headache — especially with vision changes, vomiting, or stiff neck — is a red flag.\n\n"
+                "• Visit a hospital or urgent care clinic today\n"
+                "• Note when the headache started and how fast it came on\n"
+                "• Avoid bright lights and loud environments\n"
+                "• Do not take more than the recommended dose of pain medication"
+            )
+        elif is_fever:
+            advice = (
+                "A high fever can lead to dehydration, febrile seizures, or indicate a serious infection.\n\n"
+                "• Go to a clinic or hospital today — do not wait\n"
+                "• Keep taking fluids — water, oral rehydration solution (ORS), or broth\n"
+                "• Take paracetamol/ibuprofen to manage temperature if not allergic\n"
+                "• Bring your temperature readings and any medication you've taken"
+            )
+        elif is_injury:
+            advice = (
+                "Your injury sounds serious and needs proper medical assessment.\n\n"
+                "• Go to the nearest emergency room or trauma clinic\n"
+                "• If bleeding: apply firm pressure with a clean cloth\n"
+                "• Do not attempt to realign bones or remove embedded objects\n"
+                "• Keep the injured area as still as possible while travelling"
+            )
+        elif is_stomach:
+            advice = (
+                "Severe abdominal symptoms can indicate appendicitis, bowel obstruction, or internal bleeding.\n\n"
+                "• Go to a hospital or urgent clinic today\n"
+                "• Avoid eating or drinking until evaluated (in case surgery is needed)\n"
+                "• Note the exact location of the pain and when it started\n"
+                "• Tell the doctor if you have any blood in your stool or vomit"
+            )
+        else:
+            advice = (
+                "Your symptoms are serious enough to need same-day medical attention.\n\n"
+                "• Visit your nearest clinic or hospital today\n"
+                "• Bring your ID, medical aid card, and a list of any current medications\n"
+                "• Try to have someone accompany you\n"
+                "• Do not delay — early care leads to better outcomes"
+            )
         return (
-            "📅 I can help you schedule an appointment!\n\n"
-            "Click the 'Schedule Appointment' button below to choose a department, date, and time.\n\n"
-            "Available departments include General Practice, Cardiology, Paediatrics, and more."
+            f"🟠 HIGH Severity{conf_str}\n\n"
+            f"{advice}\n\n"
+            "⚠️ VitalAI is an AI-powered assistant. Always follow advice from a qualified healthcare professional."
         )
+
+    # -- MEDIUM --
+    if severity == "MEDIUM":
+        if is_head:
+            advice = (
+                "A persistent or worsening headache that doesn't respond to over-the-counter pain relief needs a doctor's attention.\n\n"
+                "• Book a doctor's appointment within the next 1–2 days\n"
+                "• Track how often headaches occur and what triggers them\n"
+                "• Avoid screens and bright light if they worsen the pain\n"
+                "• Try paracetamol or ibuprofen if you have no contraindications"
+            )
+        elif is_fever:
+            advice = (
+                "A moderate fever suggests your body is fighting an infection. Monitor it closely.\n\n"
+                "• Keep taking fluids throughout the day\n"
+                "• Take paracetamol to bring the fever down if above 38.5°C\n"
+                "• Book a clinic visit if the fever lasts more than 2 days or rises above 39°C\n"
+                "• Avoid contact with vulnerable people (elderly, infants) while unwell"
+            )
+        elif is_throat or is_cough:
+            advice = (
+                "Throat and cough symptoms at this level may be a respiratory infection that needs treatment.\n\n"
+                "• See a doctor within the next day or two — you may need antibiotics or antivirals\n"
+                "• Gargle with warm salt water for throat pain\n"
+                "• Stay away from work or school to avoid spreading illness\n"
+                "• Avoid smoking or second-hand smoke while recovering"
+            )
+        elif is_stomach:
+            advice = (
+                "Stomach-related symptoms that persist need to be checked by a doctor.\n\n"
+                "• Stick to bland foods — toast, rice, bananas, boiled potatoes\n"
+                "• Keep drinking fluids, especially oral rehydration solution if you're vomiting\n"
+                "• Book a clinic visit if symptoms don't improve within 48 hours\n"
+                "• Avoid dairy, caffeine, and spicy food until you feel better"
+            )
+        elif is_injury:
+            advice = (
+                "Your injury should be properly assessed by a healthcare professional.\n\n"
+                "• Visit a clinic or GP within the next 24 hours\n"
+                "• Keep the area clean and covered with a sterile bandage\n"
+                "• Elevate the injured area to reduce swelling if possible\n"
+                "• Watch for signs of infection: increasing redness, warmth, or discharge"
+            )
+        else:
+            advice = (
+                "Your symptoms are worth having checked — don't leave them unaddressed.\n\n"
+                "• Book an appointment with a doctor within the next 1–2 days\n"
+                "• Use the Schedule Appointment button below to book at your nearest clinic\n"
+                "• Take note of when symptoms started and anything that makes them better or worse\n"
+                "• Avoid strenuous activity until you've been assessed"
+            )
+        return (
+            f"🟡 MEDIUM Severity{conf_str}\n\n"
+            f"{advice}\n\n"
+            "⚠️ VitalAI is an AI-powered assistant. Always consult a qualified healthcare provider for diagnosis."
+        )
+
+    # -- LOW --
+    if is_head:
+        advice = (
+            "A mild headache is usually nothing serious.\n\n"
+            "• Take paracetamol or ibuprofen if needed\n"
+            "• Drink a glass of water — dehydration is a very common trigger\n"
+            "• Step away from screens and rest your eyes for 20–30 minutes\n"
+            "• If the headache keeps coming back, keep a headache diary to share with your doctor"
+        )
+    elif is_fever:
+        advice = (
+            "A low-grade fever means your immune system is active — that's a good sign.\n\n"
+            "• Keep drinking fluids — water, warm tea, or soup\n"
+            "• Rest and avoid strenuous activity\n"
+            "• Take paracetamol if you feel uncomfortable\n"
+            "• See a doctor if the fever rises above 38.5°C or lasts more than 3 days"
+        )
+    elif is_cough or is_throat:
+        advice = (
+            "Mild throat or cough symptoms are common and usually self-limiting.\n\n"
+            "• Gargle with warm salt water a few times a day\n"
+            "• Sip warm fluids — honey and lemon tea can soothe a sore throat\n"
+            "• Avoid talking loudly or in cold air\n"
+            "• See a doctor if symptoms persist beyond 5–7 days or you develop a fever"
+        )
+    elif is_stomach:
+        advice = (
+            "Mild stomach discomfort is usually short-lived.\n\n"
+            "• Avoid rich, greasy, or spicy food for the rest of the day\n"
+            "• Peppermint tea or ginger tea can help ease nausea\n"
+            "• Stay upright for at least 30 minutes after eating\n"
+            "• See a doctor if you notice blood in your stool or vomit, or pain that intensifies"
+        )
+    elif is_injury:
+        advice = (
+            "Minor cuts, scrapes, and bruises can be managed at home.\n\n"
+            "• Clean the area with clean water and mild soap\n"
+            "• Apply an antiseptic and cover with a clean plaster or bandage\n"
+            "• Change the dressing once a day and keep it dry\n"
+            "• See a doctor if the wound shows signs of infection or doesn't heal within a week"
+        )
+    else:
+        advice = (
+            "Based on what you've described, this doesn't seem urgent right now.\n\n"
+            "• Pay attention to how you feel over the next day or two\n"
+            "• If any new symptoms appear or existing ones worsen, come back and describe them\n"
+            "• Maintaining a healthy routine — sleep, nutrition, movement — supports recovery\n"
+            "• If you're unsure, it's always okay to book a check-up"
+        )
+
     return (
-        "🟢 LOW concern based on your description.\n\n"
-        "General advice:\n"
-        "• Rest and drink plenty of fluids\n"
-        "• Monitor your symptoms over the next 24 hours\n"
-        "• Consult a healthcare professional if symptoms worsen\n\n"
-        "⚠️ VitalAI is an AI-powered assistant and does not replace professional medical advice."
+        f"🟢 LOW Severity{conf_str}\n\n"
+        f"{advice}\n\n"
+        "⚠️ VitalAI is an AI-powered assistant. If you're ever in doubt, consult a healthcare professional."
     )
+
+
+def _keyword_triage(prompt: str) -> str:
+    """Last-resort fallback when both OpenAI and ML model are unavailable."""
+    p = prompt.lower()
+    if any(w in p for w in ["chest pain", "heart attack", "can't breathe", "stroke", "unconscious"]):
+        return _build_response(prompt, "CRITICAL")
+    if any(w in p for w in ["severe", "vomiting blood", "bleeding heavily", "fracture", "seizure", "collapse"]):
+        return _build_response(prompt, "HIGH")
+    if any(w in p for w in ["fever", "headache", "pain", "sore throat", "cough", "nausea", "dizzy", "fatigue"]):
+        return _build_response(prompt, "MEDIUM")
+    if any(w in p for w in ["appointment", "book", "schedule", "doctor", "clinic"]):
+        return _build_response(prompt, "LOW")
+    return _build_response(prompt, "LOW")
