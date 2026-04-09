@@ -38,10 +38,14 @@ class Settings(BaseSettings):
     # CORS — set to your frontend URL in production (e.g., https://your-app.vercel.app)
     allowed_origins: str = Field(default="http://localhost:3000")
 
-    # AI service integration
+    # AI service integration (OpenAI or compatible)
     ai_service_url: str = Field(default="https://api.openai.com/v1")
     ai_model: str = Field(default="gpt-4o-mini")
     ai_api_key: str = Field(default="")
+
+    # Local ML triage model (team's trained severity classifier)
+    # Runs separately via: cd ai_and_nlp && python non_final_draft.py
+    ml_model_url: str = Field(default="http://localhost:5000")
 
     def get_effective_jwt_secret(self) -> str:
         """Return JWT secret, generating a temporary one for local dev if not set."""

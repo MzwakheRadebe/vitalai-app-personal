@@ -228,8 +228,79 @@ const Home = () => {
 
       {/* Footer */}
       <footer className="home-footer">
-        <div className="container">
-          <p>&copy; 2025 VitalAI. AI-powered healthcare assistance for South Africa.</p>
+        <div className="footer-main">
+          <div className="footer-grid">
+
+            {/* Brand column */}
+            <div className="footer-col">
+              <div className="footer-logo">
+                <Stethoscope size={24} />
+                <span>VitalAI</span>
+              </div>
+              <p className="footer-tagline">
+                AI-powered healthcare assistance for South Africa — reducing patient backlogs
+                and improving access to care, 24/7.
+              </p>
+            </div>
+
+            {/* Quick links */}
+            <div className="footer-col">
+              <h4>Quick Links</h4>
+              <ul className="footer-links">
+                <li><button onClick={() => setCurrentView('chat')} className="footer-link-btn">Start Chat</button></li>
+                <li><button onClick={() => setCurrentView('register')} className="footer-link-btn">Create Account</button></li>
+                <li><button onClick={() => setCurrentView('login')} className="footer-link-btn">Staff Login</button></li>
+              </ul>
+            </div>
+
+            {/* Support */}
+            <div className="footer-col">
+              <h4>Support</h4>
+              <ul className="footer-links">
+                <li><a href="https://www.health.gov.za" target="_blank" rel="noreferrer" className="footer-link-btn">Dept. of Health SA</a></li>
+                <li><a href="https://www.who.int" target="_blank" rel="noreferrer" className="footer-link-btn">World Health Organisation</a></li>
+                <li><a href="https://github.com/MzwakheRadebe/vitalai-app-personal" target="_blank" rel="noreferrer" className="footer-link-btn">GitHub Repo</a></li>
+              </ul>
+            </div>
+
+            {/* Emergency contacts */}
+            <div className="footer-col">
+              <h4>Emergency Contacts</h4>
+              <ul className="footer-links">
+                <li><span className="footer-link-btn">🚑 Ambulance: <strong>10177</strong></span></li>
+                <li><span className="footer-link-btn">🚔 Police: <strong>10111</strong></span></li>
+                <li><span className="footer-link-btn">📞 Emergency: <strong>112</strong></span></li>
+              </ul>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Disclaimer / Terms bar */}
+        <div className="footer-disclaimer">
+          <div className="container">
+            <p className="disclaimer-text">
+              ⚠️ <strong>Medical Disclaimer:</strong> VitalAI is an AI-powered triage assistant
+              and is <strong>not a substitute for professional medical advice, diagnosis, or treatment.</strong>
+              Always consult a qualified healthcare provider for medical concerns.
+              In an emergency, call <strong>10177</strong> or <strong>112</strong> immediately.
+            </p>
+            <div className="footer-legal">
+              <span>&copy; {new Date().getFullYear()} VitalAI. All rights reserved.</span>
+              <span className="footer-divider">|</span>
+              <button className="footer-legal-link" onClick={() => alert('Terms & Conditions: VitalAI provides AI-assisted health guidance for informational purposes only. By using this service you agree that responses do not constitute medical advice and that you will seek professional healthcare when needed.')}>
+                Terms &amp; Conditions
+              </button>
+              <span className="footer-divider">|</span>
+              <button className="footer-legal-link" onClick={() => alert('Privacy Policy: VitalAI collects only the information necessary to provide triage guidance. Your health data is not stored or shared with third parties. Compliant with POPIA (Protection of Personal Information Act, South Africa).')}>
+                Privacy Policy
+              </button>
+              <span className="footer-divider">|</span>
+              <a href="https://github.com/MzwakheRadebe/vitalai-app-personal" target="_blank" rel="noreferrer" className="footer-legal-link">
+                Open Source
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
