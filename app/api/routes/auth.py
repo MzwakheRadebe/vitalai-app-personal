@@ -57,53 +57,25 @@ class UserResponse(BaseModel):
 
 async def _get_user(email: str) -> dict | None:
     """Fetch a user by email. Returns None if not found."""
-    settings = get_settings()
-
-    if settings.database_url:
-        import asyncpg
-        conn = await asyncpg.connect(settings.database_url)
-        row = await conn.fetchrow(
-            "SELECT email, password_hash, role FROM users WHERE email = $1", email
+    from app.db_adapter import get_db
+    async with get_db() as db:
+        row = await db.fetchone(
+            "SELECT email, password_hash, role FROM users WHERE email = ?", (email,)
         )
-        await conn.close()
         if row:
-            return dict(row)
+            return {"email": row[0], "password_hash": row[1], "role": row[2]}
         return None
-    else:
-        import aiosqlite
-        async with aiosqlite.connect(settings.sqlite_path) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT email, password_hash, role FROM users WHERE email = ?", (email,)
-            ) as cur:
-                row = await cur.fetchone()
-                if row:
-                    return dict(row)
-                return None
 
 
 async def _create_user(email: str, password_hash: str, role: str) -> None:
     """Insert a new user into the database."""
-    settings = get_settings()
-
-    if settings.database_url:
-        import asyncpg
-        conn = await asyncpg.connect(settings.database_url)
-        try:
-            await conn.execute(
-                "INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3)",
-                email, password_hash, role,
-            )
-        finally:
-            await conn.close()
-    else:
-        import aiosqlite
-        async with aiosqlite.connect(settings.sqlite_path) as db:
-            await db.execute(
-                "INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)",
-                (email, password_hash, role),
-            )
-            await db.commit()
+    from app.db_adapter import get_db
+    async with get_db() as db:
+        await db.execute(
+            "INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)",
+            (email, password_hash, role),
+        )
+        await db.commit()
 
 
 # ---------------------------------------------------------------------------

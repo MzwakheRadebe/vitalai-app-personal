@@ -113,29 +113,39 @@ async def init_db() -> None:
 
 
 async def _init_postgres(database_url: str) -> None:
-    """Set up PostgreSQL tables using asyncpg."""
+    """Set up PostgreSQL tables using psycopg2-binary (pre-built wheels, no gcc needed)."""
+    import asyncio
+    from functools import partial
     try:
-        import asyncpg
+        import psycopg2
     except ImportError:
-        logger.error("asyncpg not installed. Run: pip install asyncpg")
+        logger.error("psycopg2-binary not installed. Run: pip install psycopg2-binary")
         return
 
-    try:
-        conn = await asyncpg.connect(database_url)
-        await conn.execute(PG_CREATE_USERS_TABLE)
-        await conn.execute(PG_CREATE_APPOINTMENTS_TABLE)
-        await conn.execute(PG_CREATE_APPOINTMENTS_INDEX)
-        await conn.execute(PG_CREATE_FAQ_TABLE)
+    def _sync_init():
+        conn = psycopg2.connect(database_url)
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute(PG_CREATE_USERS_TABLE)
+        cur.execute(PG_CREATE_APPOINTMENTS_TABLE)
+        cur.execute(PG_CREATE_APPOINTMENTS_INDEX)
+        cur.execute(PG_CREATE_FAQ_TABLE)
 
         # Seed FAQ on first run
-        count = await conn.fetchval("SELECT COUNT(*) FROM faq")
+        cur.execute("SELECT COUNT(*) FROM faq")
+        count = cur.fetchone()[0]
         if count == 0:
-            await conn.executemany(
-                "INSERT INTO faq (question, answer) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-                PG_FAQ_SEED,
-            )
+            for question, answer in PG_FAQ_SEED:
+                cur.execute(
+                    "INSERT INTO faq (question, answer) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                    (question, answer),
+                )
+        cur.close()
+        conn.close()
 
-        await conn.close()
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _sync_init)
         logger.info("PostgreSQL database initialized successfully")
     except Exception as e:
         logger.error(f"PostgreSQL initialization failed: {e}")

@@ -1,14 +1,17 @@
 """
-Database adapter providing a unified async interface for PostgreSQL and SQLite.
+Database adapter — PostgreSQL (psycopg2-binary) + SQLite (aiosqlite).
 
-- Uses asyncpg for PostgreSQL (production / Supabase)
-- Uses aiosqlite for SQLite (local development)
-- Accepts SQL with `?` placeholders; translates to `$1, $2...` for PostgreSQL
-- Exposes simple fetchone, fetchall, execute, executemany, insert, commit
+psycopg2-binary ships pre-built wheels (no C compilation on Render/Heroku).
+asyncpg requires gcc which is unavailable on many free-tier hosts.
+
+PostgreSQL is used in production (DATABASE_URL set).
+SQLite is used for local development (no DATABASE_URL).
 """
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
+from functools import partial
 from typing import Any, Iterable, Optional
 
 import aiosqlite
@@ -16,8 +19,11 @@ import aiosqlite
 from app.config import get_settings
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SQLite wrapper (local dev)
+# ─────────────────────────────────────────────────────────────────────────────
+
 class SQLiteConnection:
-    """Async SQLite wrapper."""
     def __init__(self, conn: aiosqlite.Connection):
         self.conn = conn
 
@@ -46,71 +52,96 @@ class SQLiteConnection:
         await self.conn.close()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PostgreSQL wrapper (production) — psycopg2 run in thread executor
+# ─────────────────────────────────────────────────────────────────────────────
+
 class PostgresConnection:
-    """Async PostgreSQL wrapper normalizing SQLite `?` placeholders to `$1, $2...`"""
+    """Wraps a psycopg2 connection, running sync calls in a thread pool
+    so they don't block the asyncio event loop."""
+
     def __init__(self, conn):
         self.conn = conn
 
     @staticmethod
-    def _conv(sql: str) -> str:
-        """Convert ? placeholders to $1, $2... for asyncpg."""
-        result = []
-        count = 0
-        for ch in sql:
-            if ch == "?":
-                count += 1
-                result.append(f"${count}")
-            else:
-                result.append(ch)
-        return "".join(result)
+    def _to_pg(sql: str) -> str:
+        """Convert SQLite ? placeholders to psycopg2 %s placeholders."""
+        return sql.replace("?", "%s")
+
+    async def _run(self, fn):
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, fn)
 
     async def fetchone(self, sql: str, params: Iterable[Any] = ()) -> Optional[tuple]:
-        row = await self.conn.fetchrow(self._conv(sql), *tuple(params))
-        return tuple(row.values()) if row else None
+        def _():
+            with self.conn.cursor() as cur:
+                cur.execute(self._to_pg(sql), tuple(params))
+                return cur.fetchone()
+        return await self._run(_)
 
     async def fetchall(self, sql: str, params: Iterable[Any] = ()) -> list[tuple]:
-        rows = await self.conn.fetch(self._conv(sql), *tuple(params))
-        return [tuple(r.values()) for r in rows]
+        def _():
+            with self.conn.cursor() as cur:
+                cur.execute(self._to_pg(sql), tuple(params))
+                return cur.fetchall()
+        return await self._run(_)
 
     async def execute(self, sql: str, params: Iterable[Any] = ()) -> None:
-        await self.conn.execute(self._conv(sql), *tuple(params))
+        def _():
+            with self.conn.cursor() as cur:
+                cur.execute(self._to_pg(sql), tuple(params))
+        await self._run(_)
 
     async def executemany(self, sql: str, seq_params: Iterable[Iterable[Any]]) -> None:
-        converted = self._conv(sql)
-        await self.conn.executemany(converted, [tuple(p) for p in seq_params])
+        rows = list(map(tuple, seq_params))
+        def _():
+            with self.conn.cursor() as cur:
+                cur.executemany(self._to_pg(sql), rows)
+        await self._run(_)
 
     async def insert(self, sql: str, params: Iterable[Any] = ()) -> int:
-        # For PostgreSQL, append RETURNING id to get the new row id
-        returning_sql = self._conv(sql)
-        if "returning" not in returning_sql.lower():
-            returning_sql += " RETURNING id"
-        row = await self.conn.fetchrow(returning_sql, *tuple(params))
-        return row["id"] if row else 0
+        pg_sql = self._to_pg(sql)
+        if "returning" not in pg_sql.lower():
+            pg_sql += " RETURNING id"
+        def _():
+            with self.conn.cursor() as cur:
+                cur.execute(pg_sql, tuple(params))
+                row = cur.fetchone()
+                return row[0] if row else 0
+        return await self._run(_)
 
     async def commit(self) -> None:
-        pass  # asyncpg uses auto-commit by default per statement
+        await self._run(self.conn.commit)
 
     async def close(self) -> None:
-        await self.conn.close()
+        await self._run(self.conn.close)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Context manager — picks PostgreSQL or SQLite based on DATABASE_URL
+# ─────────────────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def get_db():
-    """Yield an async DB connection.
-
-    Uses PostgreSQL (asyncpg) when DATABASE_URL is set, otherwise SQLite.
-    """
     settings = get_settings()
 
     if settings.database_url:
         try:
-            import asyncpg
+            import psycopg2
         except ImportError:
-            raise RuntimeError("asyncpg not installed. Run: pip install asyncpg")
-        conn = await asyncpg.connect(settings.database_url)
+            raise RuntimeError("psycopg2-binary not installed. Run: pip install psycopg2-binary")
+
+        loop = asyncio.get_event_loop()
+        conn = await loop.run_in_executor(
+            None, partial(psycopg2.connect, settings.database_url)
+        )
+        conn.autocommit = False
         wrapper = PostgresConnection(conn)
         try:
             yield wrapper
+        except Exception:
+            await loop.run_in_executor(None, conn.rollback)
+            raise
         finally:
             await wrapper.close()
     else:
