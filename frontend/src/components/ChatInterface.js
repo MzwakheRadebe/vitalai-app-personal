@@ -18,22 +18,12 @@ const QUICK_SYMPTOMS = [
   { label: '💙 Mental Health', value: 'I am struggling with anxiety and stress' },
 ];
 
-// Follow-up questions shown after a response
-const FOLLOW_UPS = [
-  'How long have you had these symptoms?',
-  'Are the symptoms getting worse?',
-  'Do you have any other symptoms?',
-  'Book an appointment',
-];
-
-// Parse severity from reply text
-const getSeverity = (reply) => {
-  const u = reply.toUpperCase();
-  if (u.includes('CRITICAL')) return { level: 'CRITICAL', emoji: '🔴', color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' };
-  if (u.includes('HIGH'))     return { level: 'HIGH',     emoji: '🟠', color: '#ea580c', bg: '#fff7ed', border: '#fdba74' };
-  if (u.includes('MEDIUM'))   return { level: 'MEDIUM',   emoji: '🟡', color: '#b45309', bg: '#fffbeb', border: '#fcd34d' };
-  if (u.includes('LOW'))      return { level: 'LOW',      emoji: '🟢', color: '#15803d', bg: '#f0fdf4', border: '#86efac' };
-  return null;
+// Map severity string → display config
+const SEVERITY_CONFIG = {
+  CRITICAL: { emoji: '🔴', color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
+  HIGH:     { emoji: '🟠', color: '#ea580c', bg: '#fff7ed', border: '#fdba74' },
+  MEDIUM:   { emoji: '🟡', color: '#b45309', bg: '#fffbeb', border: '#fcd34d' },
+  LOW:      { emoji: '🟢', color: '#15803d', bg: '#f0fdf4', border: '#86efac' },
 };
 
 // Render message text — convert **bold** and newlines to JSX
@@ -73,7 +63,6 @@ const ChatInterface = () => {
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [showAppointmentScheduler, setShowAppointmentScheduler] = useState(false);
-  const [showFollowUp, setShowFollowUp] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -99,12 +88,12 @@ const ChatInterface = () => {
     setMessages(prev => prev.map(m => ({ ...m, showQuickSymptoms: false })).concat(userMessage));
     setInputText('');
     setIsLoading(true);
-    setShowFollowUp(false);
 
     try {
       const data = await chatAPI.sendMessage(messageText, selectedLanguage);
       const reply = data.reply || 'Sorry, I could not process that. Please try again.';
-      const severity = getSeverity(reply);
+      const severityKey = (data.severity || '').toUpperCase();
+      const severity = SEVERITY_CONFIG[severityKey] ? { level: severityKey, ...SEVERITY_CONFIG[severityKey] } : null;
 
       const botMessage = {
         id: Date.now() + 1,
@@ -113,9 +102,9 @@ const ChatInterface = () => {
         timestamp: new Date(),
         type: 'text',
         severity,
+        confidence: data.confidence || 0,
       };
       setMessages(prev => [...prev, botMessage]);
-      setShowFollowUp(true);
     } catch {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
@@ -149,15 +138,6 @@ const ChatInterface = () => {
       type: 'appointment',
     }]);
     setShowAppointmentScheduler(false);
-  };
-
-  const handleFollowUp = (question) => {
-    if (question === 'Book an appointment') {
-      setShowAppointmentScheduler(true);
-      setShowFollowUp(false);
-    } else {
-      sendMessage(question);
-    }
   };
 
   const handleReset = () => {
@@ -213,12 +193,15 @@ const ChatInterface = () => {
                   border: `1px solid ${message.severity.border}`,
                   color: message.severity.color,
                   borderRadius: '20px',
-                  padding: '3px 10px',
+                  padding: '4px 12px',
                   fontSize: '12px',
                   fontWeight: 700,
-                  marginBottom: '8px',
+                  marginBottom: '10px',
                 }}>
-                  {message.severity.emoji} {message.severity.level} SEVERITY
+                  {message.severity.emoji} {message.severity.level}
+                  {message.confidence > 0 && (
+                    <span style={{ fontWeight: 400, opacity: 0.75 }}>· {message.confidence}% confidence</span>
+                  )}
                 </div>
               )}
 
@@ -267,28 +250,6 @@ const ChatInterface = () => {
             <div className="message-content">
               <div className="typing-indicator"><span /><span /><span /></div>
             </div>
-          </div>
-        )}
-
-        {/* Follow-up suggestions */}
-        {showFollowUp && !isLoading && (
-          <div style={{ padding: '8px 16px 4px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {FOLLOW_UPS.map((q) => (
-              <button
-                key={q}
-                onClick={() => handleFollowUp(q)}
-                style={{
-                  background: '#fff', border: '1px solid #d1d5db',
-                  borderRadius: '16px', padding: '5px 13px',
-                  fontSize: '12px', cursor: 'pointer', color: '#374151',
-                  transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#f9fafb'; e.currentTarget.style.borderColor = '#9ca3af'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#d1d5db'; }}
-              >
-                {q}
-              </button>
-            ))}
           </div>
         )}
 

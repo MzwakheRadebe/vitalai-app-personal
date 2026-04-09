@@ -43,8 +43,10 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """Outgoing response with a single `reply` string."""
+    """Outgoing chat response — includes severity and confidence for the frontend badge."""
     reply: str
+    severity: str = ""       # LOW | MEDIUM | HIGH | CRITICAL | ""
+    confidence: int = 0      # 0–100 percentage
 
 
 @router.post("", response_model=ChatResponse)
@@ -142,22 +144,62 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
             return ChatResponse(reply=reply)
     except Exception:
         # OpenAI/external AI failed or not configured — try the local trained ML model
-        ml_reply = await _call_ml_model(p, settings)
-        if ml_reply:
-            logger.info("/api/chat ml-model-response ip=%s reply_len=%d", ip, len(ml_reply))
-            return ChatResponse(reply=ml_reply)
+        result = await _call_ml_model(p, settings)
+        if result:
+            reply, severity, conf = result
+            logger.info("/api/chat ml-model-response ip=%s reply_len=%d", ip, len(reply))
+            return ChatResponse(reply=reply, severity=severity, confidence=conf)
 
         # ML model also unavailable — return a structured keyword-based fallback
-        reply = _keyword_triage(p)
+        severity, reply = _keyword_triage(p)
         logger.warning("/api/chat keyword-fallback ip=%s reply_len=%d", ip, len(reply))
-        return ChatResponse(reply=reply)
+        return ChatResponse(reply=reply, severity=severity, confidence=0)
 
 
-async def _call_ml_model(prompt: str, settings) -> str | None:
+def _force_severity(prompt: str) -> str | None:
+    """Override the ML model when it under-classifies clearly serious symptoms.
+
+    The trained model may rate 'broken toe' as MEDIUM, but any broken bone,
+    dislocation, or separation is clinically HIGH. These overrides ensure
+    the response matches real-world triage standards.
+    """
+    p = prompt.lower()
+
+    # Always CRITICAL — life-threatening
+    critical_keywords = [
+        "heart attack", "stroke", "can't breathe", "cannot breathe",
+        "not breathing", "stopped breathing", "unconscious", "unresponsive",
+        "choking", "overdose", "suicidal", "want to die", "end my life",
+        "severe allergic", "anaphylaxis", "seizure", "fitting",
+        "vomiting blood", "coughing blood", "internal bleeding",
+    ]
+    if any(k in p for k in critical_keywords):
+        return "CRITICAL"
+
+    # Always HIGH — urgent, same-day care needed
+    high_keywords = [
+        "broken", "fracture", "fractured", "dislocated", "dislocation",
+        "torn", "tear", "separated", "separation", "snapped",
+        "compound fracture", "open fracture", "bone sticking",
+        "can't move", "cannot move", "numbness", "paralysis",
+        "deep cut", "won't stop bleeding", "gaping wound",
+        "severe burn", "third degree", "severe chest pain",
+        "severe abdominal", "appendix", "appendicitis",
+        "meningitis", "stiff neck with fever", "vision loss",
+        "sudden vision", "slurred speech", "face drooping",
+        "high fever", "fever above 40", "fever over 40",
+    ]
+    if any(k in p for k in high_keywords):
+        return "HIGH"
+
+    return None  # Let the ML model decide
+
+
+async def _call_ml_model(prompt: str, settings) -> tuple[str, str, int] | None:
     """Call the team's trained ML triage model at /predict.
 
-    Returns a symptom-aware, severity-specific response built from
-    the ML model's predicted_severity + the user's actual symptoms.
+    Returns (reply, severity, confidence_pct) or None if unavailable.
+    Applies severity overrides for keywords the model may under-classify.
     """
     ml_url = getattr(settings, "ml_model_url", None) or "http://localhost:5000"
     try:
@@ -166,14 +208,24 @@ async def _call_ml_model(prompt: str, settings) -> str | None:
             r.raise_for_status()
             data = r.json()
 
-        severity = str(data.get("predicted_severity", "")).upper()
+        ml_severity = str(data.get("predicted_severity", "")).upper()
         confidence = data.get("confidence", 0)
         conf_pct = int(confidence * 100)
 
-        if severity not in ("LOW", "MEDIUM", "HIGH", "CRITICAL"):
+        if ml_severity not in ("LOW", "MEDIUM", "HIGH", "CRITICAL"):
             return None
 
-        return _build_response(prompt, severity, conf_pct)
+        # Apply override — bump up if keywords demand it
+        forced = _force_severity(prompt)
+        severity_rank = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+        if forced and severity_rank.get(forced, 0) > severity_rank.get(ml_severity, 0):
+            severity = forced
+            conf_pct = 0  # override confidence not shown
+        else:
+            severity = ml_severity
+
+        reply = _build_response(prompt, severity, conf_pct)
+        return reply, severity, conf_pct
     except Exception:
         return None
 
@@ -181,121 +233,155 @@ async def _call_ml_model(prompt: str, settings) -> str | None:
 def _build_response(prompt: str, severity: str, conf_pct: int = 0) -> str:
     """Build a symptom-aware, human-sounding triage response.
 
-    Detects the symptom type from the user's message and tailors
-    the advice to match — so headache advice differs from chest pain advice.
+    Rules:
+    - No specific medicine names — direct to pharmacy for OTC options
+    - No severity label in the text (frontend badge handles that)
+    - Ends with a relevant follow-up question so the AI drives the conversation
     """
     p = prompt.lower()
 
     # -- Detect symptom category --
     is_head    = any(w in p for w in ["headache", "migraine", "head", "forehead", "temple"])
-    is_chest   = any(w in p for w in ["chest", "heart", "palpitation", "breathing", "breath", "inhale", "exhale"])
+    is_chest   = any(w in p for w in ["chest", "heart", "palpitation", "breathing", "breath"])
     is_fever   = any(w in p for w in ["fever", "temperature", "chills", "sweating", "hot"])
     is_stomach = any(w in p for w in ["stomach", "nausea", "vomit", "diarrhea", "abdomen", "bloat", "cramp", "bowel"])
     is_throat  = any(w in p for w in ["throat", "swallow", "tonsil", "hoarse", "voice"])
     is_cough   = any(w in p for w in ["cough", "wheeze", "phlegm", "mucus", "congestion"])
-    is_injury  = any(w in p for w in ["cut", "wound", "burn", "fracture", "broken", "bleeding", "fall", "injury", "swollen"])
+    is_injury  = any(w in p for w in [
+        "cut", "wound", "burn", "fracture", "broken", "break", "dislocated",
+        "dislocation", "torn", "tear", "separated", "separation", "bleeding",
+        "fall", "fell", "injury", "swollen", "sprain", "snapped", "toe", "finger",
+        "wrist", "ankle", "knee", "shoulder", "elbow", "bone",
+    ])
     is_mental  = any(w in p for w in ["anxiety", "panic", "stress", "depression", "suicide", "self-harm", "mental"])
     is_appt    = any(w in p for w in ["appointment", "book", "schedule", "doctor", "clinic", "hospital"])
 
-    conf_str = f" (model confidence: {conf_pct}%)" if conf_pct else ""
-
-    # -- Appointment request (any severity) --
+    # -- Appointment request --
     if is_appt:
         return (
-            "📅 I can help you book an appointment.\n\n"
-            "Click the **Schedule Appointment** button below to choose your preferred department, date, and time slot.\n\n"
+            "I can help you book an appointment.\n\n"
+            "Click the **Schedule Appointment** button below to choose your preferred department, date, and time.\n\n"
             "Departments available: General Practice · Cardiology · Paediatrics · ENT · Orthopaedics · Mental Health · Gynaecology\n\n"
-            "If this is an emergency, please call **10177** or **112** instead of booking."
+            "If this is an emergency, please call **10177** or **112** instead of waiting for an appointment.\n\n"
+            "Before you book — is there a specific department you need, or would you like me to suggest one based on your symptoms?"
         )
 
-    # -- Mental health (handle sensitively regardless of severity) --
+    # -- Mental health --
     if is_mental:
         return (
-            "💙 I hear you, and I want you to know your feelings are valid.\n\n"
-            f"Severity assessment: **{severity}**{conf_str}\n\n"
-            "Please reach out for support:\n"
-            "• **SADAG Helpline:** 0800 456 789 (free, 24/7)\n"
+            "I hear you, and I want you to know your feelings are valid.\n\n"
+            "Please reach out to one of these free services right now:\n"
+            "• **SADAG Helpline:** 0800 456 789 — available 24/7, free call\n"
             "• **Lifeline SA:** 0861 322 322\n"
-            "• Talk to a trusted person — a friend, family member, or counsellor\n"
-            "• Book a session with a mental health professional via the Schedule Appointment button\n\n"
-            "You are not alone. ⚠️ VitalAI does not replace professional mental health care."
+            "• **SMS support:** SMS 31393\n\n"
+            "You can also use the Schedule Appointment button below to book a session with a mental health professional at your nearest clinic.\n\n"
+            "You are not alone. Can you tell me a little more about what you're going through right now?\n\n"
+            "⚠️ VitalAI does not replace professional mental health care."
         )
 
     # -- CRITICAL --
     if severity == "CRITICAL":
         if is_chest:
-            detail = "Chest-related symptoms at this severity level could indicate a heart attack, pulmonary embolism, or severe respiratory failure."
+            detail = "Chest symptoms at this level can indicate a heart attack, pulmonary embolism, or acute respiratory failure — all of which require immediate emergency care."
         elif is_head:
-            detail = "Severe head symptoms can signal a stroke, brain bleed, or dangerous spike in blood pressure."
+            detail = "Sudden or severe head symptoms like these can be a sign of a stroke, brain bleed, or a dangerous spike in blood pressure."
         elif is_injury:
-            detail = "The injury you've described may involve serious blood loss or internal damage."
+            detail = "This injury may involve severe blood loss, internal damage, or trauma that cannot be safely managed at home."
         else:
-            detail = "Your symptoms suggest a potentially life-threatening condition that needs immediate evaluation."
+            detail = "Your symptoms suggest a potentially life-threatening condition that needs immediate professional evaluation."
 
         return (
-            f"🔴 CRITICAL — Seek Emergency Care Now{conf_str}\n\n"
             f"{detail}\n\n"
             "**Do this right now:**\n"
-            "• Call **10177** (ambulance) or **112** (emergency) immediately\n"
-            "• Do NOT drive yourself — call someone or wait for emergency services\n"
-            "• If you are alone, unlock your front door so paramedics can enter\n"
-            "• Stay as calm and still as possible\n\n"
-            "⚠️ VitalAI is an AI-powered assistant. This is not a substitute for emergency medical care."
+            "• Call **10177** (ambulance) or **112** immediately — do not wait\n"
+            "• Do NOT drive yourself\n"
+            "• If you are alone, unlock your front door so paramedics can reach you\n"
+            "• Sit or lie down and stay as calm as possible\n"
+            "• Do not eat or drink anything\n\n"
+            "Is there someone with you right now who can help you call for assistance?\n\n"
+            "⚠️ VitalAI is an AI-powered assistant. Call emergency services immediately — do not rely on this app in an emergency."
         )
 
     # -- HIGH --
     if severity == "HIGH":
-        if is_chest:
+        if is_injury:
+            if any(w in p for w in ["broken", "fracture", "fractured", "dislocated", "dislocation", "torn", "separated", "snapped"]):
+                advice = (
+                    "A broken bone, dislocation, or torn tissue is a serious orthopaedic injury that needs professional treatment today — it cannot heal properly without medical assessment.\n\n"
+                    "• Go to the nearest emergency room, trauma unit, or 24-hour clinic now\n"
+                    "• **Do not try to straighten, pop back, or apply pressure to the injured area** — this can cause further damage\n"
+                    "• Immobilise the area as best you can — use a makeshift splint if available (rolled magazine, stick)\n"
+                    "• Apply ice wrapped in a cloth to reduce swelling — never ice directly on skin\n"
+                    "• If there is an open wound or bone visible, cover it loosely with a clean cloth and go immediately"
+                )
+            elif any(w in p for w in ["burn", "burnt", "scalded"]):
+                advice = (
+                    "A serious burn requires hospital treatment.\n\n"
+                    "• Run cool (not ice cold) water over the burn for at least 20 minutes\n"
+                    "• Do not apply creams, butter, or toothpaste — this traps heat and causes infection\n"
+                    "• Cover loosely with cling wrap or a clean non-fluffy cloth\n"
+                    "• Go to the emergency room immediately — do not wait"
+                )
+            elif any(w in p for w in ["bleeding", "blood", "cut", "gash"]):
+                advice = (
+                    "Significant bleeding or a deep wound needs urgent medical attention.\n\n"
+                    "• Apply firm, continuous pressure with a clean cloth — do not lift the cloth to check\n"
+                    "• If blood soaks through, add more cloth on top and keep pressing\n"
+                    "• Keep the injured area raised above the level of your heart if possible\n"
+                    "• Go to an emergency room or trauma clinic now — you may need stitches or wound treatment"
+                )
+            else:
+                advice = (
+                    "This injury sounds serious and needs same-day professional assessment.\n\n"
+                    "• Go to your nearest emergency room or urgent care clinic today\n"
+                    "• Immobilise and protect the injured area during travel\n"
+                    "• Do not eat or drink in case treatment or sedation is needed\n"
+                    "• Bring a list of any chronic medication you take"
+                )
+        elif is_chest:
             advice = (
-                "Chest tightness, pressure, or pain — especially with shortness of breath — needs same-day evaluation.\n\n"
-                "• Go to your nearest hospital or emergency clinic today\n"
-                "• Do not ignore this or wait to see if it passes\n"
-                "• Avoid physical exertion until you've been assessed\n"
-                "• If pain intensifies or spreads to your arm or jaw, call 10177 immediately"
-            )
-        elif is_head:
-            advice = (
-                "A severe or rapidly worsening headache — especially with vision changes, vomiting, or stiff neck — is a red flag.\n\n"
-                "• Visit a hospital or urgent care clinic today\n"
-                "• Note when the headache started and how fast it came on\n"
-                "• Avoid bright lights and loud environments\n"
-                "• Do not take more than the recommended dose of pain medication"
+                "Chest symptoms at this level need same-day evaluation — do not ignore or wait.\n\n"
+                "• Go to the nearest hospital emergency unit or 24-hour clinic today\n"
+                "• Avoid any physical exertion until assessed by a doctor\n"
+                "• If the pain spreads to your arm, neck, or jaw, or you feel faint — call **10177** immediately\n"
+                "• Tell the doctor exactly where the pain is, when it started, and whether it comes and goes"
             )
         elif is_fever:
             advice = (
-                "A high fever can lead to dehydration, febrile seizures, or indicate a serious infection.\n\n"
-                "• Go to a clinic or hospital today — do not wait\n"
-                "• Keep taking fluids — water, oral rehydration solution (ORS), or broth\n"
-                "• Take paracetamol/ibuprofen to manage temperature if not allergic\n"
-                "• Bring your temperature readings and any medication you've taken"
+                "A high fever can become dangerous if not treated — especially in children, the elderly, or those with existing conditions.\n\n"
+                "• Go to a clinic or hospital today\n"
+                "• Keep taking fluids — water or oral rehydration solution\n"
+                "• A pharmacist can advise on fever-reducing options available over the counter\n"
+                "• Bring your temperature readings when you see the doctor"
             )
-        elif is_injury:
+        elif is_head:
             advice = (
-                "Your injury sounds serious and needs proper medical assessment.\n\n"
-                "• Go to the nearest emergency room or trauma clinic\n"
-                "• If bleeding: apply firm pressure with a clean cloth\n"
-                "• Do not attempt to realign bones or remove embedded objects\n"
-                "• Keep the injured area as still as possible while travelling"
+                "A severe or rapidly worsening headache — especially with nausea, vision changes, or a stiff neck — is a warning sign that needs urgent attention.\n\n"
+                "• Visit a hospital or urgent care clinic today\n"
+                "• Make a note of when the headache started, how quickly it came on, and its intensity (1–10)\n"
+                "• Avoid bright lights and screens\n"
+                "• Ask a pharmacist for over-the-counter relief while you arrange to be seen"
             )
         elif is_stomach:
             advice = (
-                "Severe abdominal symptoms can indicate appendicitis, bowel obstruction, or internal bleeding.\n\n"
+                "Severe abdominal pain can indicate appendicitis, a bowel obstruction, or internal bleeding — do not wait.\n\n"
                 "• Go to a hospital or urgent clinic today\n"
-                "• Avoid eating or drinking until evaluated (in case surgery is needed)\n"
+                "• Avoid eating or drinking until you've been assessed — you may need procedures that require an empty stomach\n"
                 "• Note the exact location of the pain and when it started\n"
-                "• Tell the doctor if you have any blood in your stool or vomit"
+                "• Tell the doctor if you notice any blood in your stool or vomit"
             )
         else:
             advice = (
-                "Your symptoms are serious enough to need same-day medical attention.\n\n"
-                "• Visit your nearest clinic or hospital today\n"
-                "• Bring your ID, medical aid card, and a list of any current medications\n"
-                "• Try to have someone accompany you\n"
-                "• Do not delay — early care leads to better outcomes"
+                "Your symptoms are serious enough to need attention today.\n\n"
+                "• Visit your nearest clinic or hospital — do not leave it for tomorrow\n"
+                "• Bring your ID, any chronic medication, and a note of how long you've had symptoms\n"
+                "• Ask someone to go with you if possible\n"
+                "• A pharmacist can advise on anything that helps manage discomfort in the meantime"
             )
+
         return (
-            f"🟠 HIGH Severity{conf_str}\n\n"
             f"{advice}\n\n"
+            "How long have you had these symptoms, and have they been getting worse or staying the same?\n\n"
             "⚠️ VitalAI is an AI-powered assistant. Always follow advice from a qualified healthcare professional."
         )
 
@@ -303,124 +389,123 @@ def _build_response(prompt: str, severity: str, conf_pct: int = 0) -> str:
     if severity == "MEDIUM":
         if is_head:
             advice = (
-                "A persistent or worsening headache that doesn't respond to over-the-counter pain relief needs a doctor's attention.\n\n"
-                "• Book a doctor's appointment within the next 1–2 days\n"
-                "• Track how often headaches occur and what triggers them\n"
-                "• Avoid screens and bright light if they worsen the pain\n"
-                "• Try paracetamol or ibuprofen if you have no contraindications"
+                "A persistent or worsening headache that isn't improving on its own needs a doctor's attention within the next day or two.\n\n"
+                "• Book an appointment with a doctor or clinic soon — use the Schedule Appointment button below\n"
+                "• Keep track of when headaches happen, how long they last, and what you were doing\n"
+                "• Reduce screen time and rest in a calm, darker room\n"
+                "• A pharmacist can recommend something for relief over the counter — ask them what's suitable for your situation"
             )
         elif is_fever:
             advice = (
-                "A moderate fever suggests your body is fighting an infection. Monitor it closely.\n\n"
-                "• Keep taking fluids throughout the day\n"
-                "• Take paracetamol to bring the fever down if above 38.5°C\n"
-                "• Book a clinic visit if the fever lasts more than 2 days or rises above 39°C\n"
-                "• Avoid contact with vulnerable people (elderly, infants) while unwell"
+                "A moderate fever means your body is fighting something. Monitor it carefully over the next 24–48 hours.\n\n"
+                "• Keep drinking fluids regularly throughout the day\n"
+                "• A pharmacist can advise on over-the-counter fever relief that's appropriate for you\n"
+                "• Book a clinic visit if the fever lasts more than 2 days, rises above 39°C, or is accompanied by a rash\n"
+                "• Avoid close contact with elderly family members or young children while you're unwell"
             )
         elif is_throat or is_cough:
             advice = (
-                "Throat and cough symptoms at this level may be a respiratory infection that needs treatment.\n\n"
-                "• See a doctor within the next day or two — you may need antibiotics or antivirals\n"
-                "• Gargle with warm salt water for throat pain\n"
-                "• Stay away from work or school to avoid spreading illness\n"
-                "• Avoid smoking or second-hand smoke while recovering"
+                "Persistent throat or cough symptoms at this level may be a respiratory infection that needs treatment.\n\n"
+                "• See a doctor within the next 1–2 days — a pharmacist can also advise on what's available over the counter\n"
+                "• Gargle with warm salt water a few times a day for throat discomfort\n"
+                "• Stay away from work or school to avoid spreading the illness\n"
+                "• Avoid smoking and cold air, which can irritate already-inflamed airways"
             )
         elif is_stomach:
             advice = (
-                "Stomach-related symptoms that persist need to be checked by a doctor.\n\n"
-                "• Stick to bland foods — toast, rice, bananas, boiled potatoes\n"
-                "• Keep drinking fluids, especially oral rehydration solution if you're vomiting\n"
-                "• Book a clinic visit if symptoms don't improve within 48 hours\n"
-                "• Avoid dairy, caffeine, and spicy food until you feel better"
+                "Persistent stomach symptoms that don't resolve on their own should be checked by a doctor.\n\n"
+                "• Stick to bland foods — plain toast, rice, boiled vegetables\n"
+                "• Keep drinking fluids, especially if you've been vomiting or have diarrhoea\n"
+                "• A pharmacist can suggest over-the-counter options for nausea or discomfort\n"
+                "• Book a clinic visit if symptoms haven't improved in 48 hours"
             )
         elif is_injury:
             advice = (
-                "Your injury should be properly assessed by a healthcare professional.\n\n"
+                "Your injury should be properly assessed by a healthcare professional — some injuries look minor but need treatment to heal correctly.\n\n"
                 "• Visit a clinic or GP within the next 24 hours\n"
-                "• Keep the area clean and covered with a sterile bandage\n"
-                "• Elevate the injured area to reduce swelling if possible\n"
-                "• Watch for signs of infection: increasing redness, warmth, or discharge"
+                "• Keep the area clean and protected with a bandage or covering\n"
+                "• Elevate the injured area to help reduce swelling\n"
+                "• A pharmacist can advise on appropriate pain management and wound care products"
             )
         else:
             advice = (
                 "Your symptoms are worth having checked — don't leave them unaddressed.\n\n"
                 "• Book an appointment with a doctor within the next 1–2 days\n"
                 "• Use the Schedule Appointment button below to book at your nearest clinic\n"
-                "• Take note of when symptoms started and anything that makes them better or worse\n"
-                "• Avoid strenuous activity until you've been assessed"
+                "• Note when symptoms started and anything that makes them better or worse\n"
+                "• A pharmacist can advise on over-the-counter options to manage discomfort in the meantime"
             )
+
         return (
-            f"🟡 MEDIUM Severity{conf_str}\n\n"
             f"{advice}\n\n"
+            "Have your symptoms been getting worse since they started, or staying about the same?\n\n"
             "⚠️ VitalAI is an AI-powered assistant. Always consult a qualified healthcare provider for diagnosis."
         )
 
     # -- LOW --
     if is_head:
         advice = (
-            "A mild headache is usually nothing serious.\n\n"
-            "• Take paracetamol or ibuprofen if needed\n"
-            "• Drink a glass of water — dehydration is a very common trigger\n"
-            "• Step away from screens and rest your eyes for 20–30 minutes\n"
-            "• If the headache keeps coming back, keep a headache diary to share with your doctor"
+            "A mild headache is usually not a cause for concern.\n\n"
+            "• Drink a full glass of water — dehydration is one of the most common headache triggers\n"
+            "• Step away from screens and rest in a quiet room for 20–30 minutes\n"
+            "• A pharmacist can recommend a suitable over-the-counter pain reliever if needed\n"
+            "• If headaches keep returning regularly, mention it to your doctor at your next visit"
         )
     elif is_fever:
         advice = (
-            "A low-grade fever means your immune system is active — that's a good sign.\n\n"
-            "• Keep drinking fluids — water, warm tea, or soup\n"
-            "• Rest and avoid strenuous activity\n"
-            "• Take paracetamol if you feel uncomfortable\n"
+            "A mild fever usually means your immune system is doing its job.\n\n"
+            "• Keep drinking fluids — warm water, soup, or herbal tea\n"
+            "• Rest and avoid strenuous activity for the rest of the day\n"
+            "• A pharmacist can suggest a suitable fever reducer if you're feeling very uncomfortable\n"
             "• See a doctor if the fever rises above 38.5°C or lasts more than 3 days"
         )
     elif is_cough or is_throat:
         advice = (
-            "Mild throat or cough symptoms are common and usually self-limiting.\n\n"
+            "Mild throat and cough symptoms are common and usually clear up on their own.\n\n"
             "• Gargle with warm salt water a few times a day\n"
-            "• Sip warm fluids — honey and lemon tea can soothe a sore throat\n"
-            "• Avoid talking loudly or in cold air\n"
-            "• See a doctor if symptoms persist beyond 5–7 days or you develop a fever"
+            "• Sip warm fluids — honey and lemon in warm water can be soothing\n"
+            "• A pharmacist can recommend a suitable throat lozenge or cough syrup\n"
+            "• See a doctor if symptoms persist beyond 5–7 days or a fever develops"
         )
     elif is_stomach:
         advice = (
-            "Mild stomach discomfort is usually short-lived.\n\n"
-            "• Avoid rich, greasy, or spicy food for the rest of the day\n"
-            "• Peppermint tea or ginger tea can help ease nausea\n"
+            "Mild stomach discomfort is usually short-lived and manageable at home.\n\n"
+            "• Avoid rich, greasy, or spicy food for today\n"
+            "• Sip peppermint or ginger tea — both can help with nausea\n"
             "• Stay upright for at least 30 minutes after eating\n"
-            "• See a doctor if you notice blood in your stool or vomit, or pain that intensifies"
+            "• A pharmacist can advise on suitable over-the-counter options\n"
+            "• See a doctor if symptoms don't improve, or if you notice blood in your stool"
         )
     elif is_injury:
         advice = (
-            "Minor cuts, scrapes, and bruises can be managed at home.\n\n"
-            "• Clean the area with clean water and mild soap\n"
-            "• Apply an antiseptic and cover with a clean plaster or bandage\n"
-            "• Change the dressing once a day and keep it dry\n"
-            "• See a doctor if the wound shows signs of infection or doesn't heal within a week"
+            "Minor cuts, scrapes, and bruises can usually be managed at home.\n\n"
+            "• Clean the area thoroughly with clean water\n"
+            "• Cover with a clean plaster or bandage\n"
+            "• A pharmacist can advise on antiseptic creams and wound care supplies\n"
+            "• See a doctor if the area becomes increasingly red, warm, swollen, or starts to discharge"
         )
     else:
         advice = (
             "Based on what you've described, this doesn't seem urgent right now.\n\n"
-            "• Pay attention to how you feel over the next day or two\n"
-            "• If any new symptoms appear or existing ones worsen, come back and describe them\n"
-            "• Maintaining a healthy routine — sleep, nutrition, movement — supports recovery\n"
-            "• If you're unsure, it's always okay to book a check-up"
+            "• Monitor how you feel over the next 24–48 hours\n"
+            "• If any new symptoms appear or existing ones worsen, describe them to me again\n"
+            "• A pharmacist is a good first stop if you need something to manage discomfort\n"
+            "• If you're still unsure, booking a routine check-up with a GP is always a sensible step"
         )
 
     return (
-        f"🟢 LOW Severity{conf_str}\n\n"
         f"{advice}\n\n"
-        "⚠️ VitalAI is an AI-powered assistant. If you're ever in doubt, consult a healthcare professional."
+        "Is there anything else you'd like to tell me about how you're feeling, or have you noticed any other symptoms?\n\n"
+        "⚠️ VitalAI is an AI-powered assistant. When in doubt, always consult a healthcare professional."
     )
 
 
-def _keyword_triage(prompt: str) -> str:
-    """Last-resort fallback when both OpenAI and ML model are unavailable."""
+def _keyword_triage(prompt: str) -> tuple[str, str]:
+    """Last-resort fallback — returns (severity, reply)."""
+    forced = _force_severity(prompt)
+    if forced:
+        return forced, _build_response(prompt, forced)
     p = prompt.lower()
-    if any(w in p for w in ["chest pain", "heart attack", "can't breathe", "stroke", "unconscious"]):
-        return _build_response(prompt, "CRITICAL")
-    if any(w in p for w in ["severe", "vomiting blood", "bleeding heavily", "fracture", "seizure", "collapse"]):
-        return _build_response(prompt, "HIGH")
     if any(w in p for w in ["fever", "headache", "pain", "sore throat", "cough", "nausea", "dizzy", "fatigue"]):
-        return _build_response(prompt, "MEDIUM")
-    if any(w in p for w in ["appointment", "book", "schedule", "doctor", "clinic"]):
-        return _build_response(prompt, "LOW")
-    return _build_response(prompt, "LOW")
+        return "MEDIUM", _build_response(prompt, "MEDIUM")
+    return "LOW", _build_response(prompt, "LOW")
