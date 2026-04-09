@@ -149,7 +149,6 @@ const ChatInterface = () => {
       type: 'text',
       showQuickSymptoms: true,
     }]);
-    setShowFollowUp(false);
     setInputText('');
   };
 
