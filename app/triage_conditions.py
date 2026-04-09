@@ -562,6 +562,45 @@ MEDIUM_KEYWORDS: list[str] = [
 ]
 
 
+MEDIUM_KEYWORDS: list[str] = [
+    # Breathing — any mention is at minimum MEDIUM
+    "breathing", "breath", "breathe", "inhale", "exhale", "respiratory",
+    "shortness of breath", "short of breath", "breathless", "breathlessness",
+    "difficulty breathing", "trouble breathing", "hard to breathe",
+    "winded", "out of breath",
+    # Vision / sight — always needs a doctor
+    "vision", "sight", "seeing", "eyesight",
+    "blurry", "blurred", "double vision", "floaters", "flashes",
+    "can't see", "cannot see", "trouble seeing", "difficulty seeing",
+    # Chest
+    "chest", "palpitation", "palpitations", "heart racing", "heart pounding",
+    "irregular heartbeat", "heart flutter",
+    # Neurological
+    "dizzy", "dizziness", "vertigo", "fainting", "faint", "lightheaded",
+    "numbness", "tingling", "weakness", "confusion", "memory loss",
+    # Fever
+    "fever", "high temperature",
+    # Serious pain
+    "severe", "unbearable", "excruciating", "worst pain",
+    # Bleeding
+    "blood in stool", "rectal bleeding", "blood in urine", "blood when urinating",
+    # Infection
+    "infection", "cellulitis",
+    # Swelling
+    "swollen", "swelling",
+    # Skin
+    "rash with fever", "jaundice", "yellow skin", "yellow eyes",
+    # Mental health
+    "suicidal thoughts", "self harm", "self-harm", "depression", "panic attack",
+    # Paediatric
+    "baby sick", "infant sick", "child fever",
+    # Sudden onset — always worth checking
+    "sudden", "suddenly",
+    # Abdomen
+    "vomiting blood", "coughing blood",
+]
+
+
 def get_severity_info(condition_name: str) -> str | None:
     """Look up a condition name and return its severity level.
 

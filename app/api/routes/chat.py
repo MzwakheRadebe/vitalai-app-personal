@@ -18,7 +18,7 @@ import httpx
 import logging
 from time import monotonic
 from app.config import get_settings
-from app.triage_conditions import CRITICAL_KEYWORDS, HIGH_KEYWORDS
+from app.triage_conditions import CRITICAL_KEYWORDS, HIGH_KEYWORDS, MEDIUM_KEYWORDS
 
 
 router = APIRouter(prefix="/chat")
@@ -172,6 +172,9 @@ def _force_severity(prompt: str) -> str | None:
 
     if any(k in p for k in HIGH_KEYWORDS):
         return "HIGH"
+
+    if any(k in p for k in MEDIUM_KEYWORDS):
+        return "MEDIUM"
 
     return None  # Let the ML model decide
 

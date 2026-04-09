@@ -88,6 +88,7 @@ _CRITICAL_KW = [
 ]
 
 _HIGH_KW = [
+    # Fractures / bones / joints
     "broken bone", "broken", "fracture", "fractured",
     "compound fracture", "open fracture", "stress fracture", "hairline fracture",
     "dislocated", "dislocation", "popped out", "out of socket",
@@ -97,47 +98,119 @@ _HIGH_KW = [
     "cannot move", "can't move", "unable to move",
     "cannot walk", "can't walk", "unable to bear weight",
     "numbness after injury", "paralysis", "paralyzed", "paralysed",
+    # Wounds / bleeding
     "deep cut", "deep laceration", "gaping wound",
     "won't stop bleeding", "bleeding won't stop", "spurting blood",
     "needs stitches",
+    # Burns
     "second degree burn", "third degree", "blistering burn",
     "chemical burn", "acid burn",
+    # Head
     "head injury", "hit head", "concussion", "loss of consciousness", "blacked out",
     "vomited after head injury",
+    # Abdominal
     "appendicitis", "appendix pain", "appendix",
     "bowel obstruction", "twisted bowel",
     "tarry stool", "melaena", "black stool with blood",
     "pancreatitis", "severe abdominal pain",
+    # Chest / cardiac
     "severe chest pain", "chest pressure", "crushing chest",
+    "chest tightness", "chest pain",
     "pain in left arm", "jaw pain with chest",
-    "asthma attack", "asthma not responding",
-    "blue lips", "cyanosis", "difficulty breathing at rest",
-    "sudden vision loss", "sudden blindness", "face drooping",
-    "arm weakness", "slurred speech", "facial droop",
+    # Breathing — any mention of breathing difficulty is at least HIGH
+    "difficulty breathing", "trouble breathing", "hard to breathe",
+    "shortness of breath", "short of breath", "breathless", "breathlessness",
+    "can't catch my breath", "cannot catch breath", "struggling to breathe",
+    "asthma attack", "asthma not responding", "wheezing badly",
+    "blue lips", "cyanosis", "breathing problem", "breathing difficulty",
+    "laboured breathing", "rapid breathing", "breathing fast",
+    "breathing is difficult", "breathing issues", "breathing trouble",
+    # Vision / eyes — any sight complaint is at least HIGH
+    "vision problem", "vision loss", "loss of vision", "losing vision",
+    "blurry vision", "blurred vision", "double vision",
+    "can't see", "cannot see", "sight problem", "sight loss",
+    "losing sight", "trouble seeing", "difficulty seeing",
+    "sudden vision", "sudden blindness", "eyes blurry",
+    "eye pain", "eye pressure", "seeing flashes", "seeing floaters",
+    "shadow in vision", "curtain over vision", "retinal",
+    "face drooping", "arm weakness", "slurred speech", "facial droop",
+    # Neurological
     "meningitis", "stiff neck with fever", "photophobia fever",
+    "sudden confusion", "sudden weakness", "sudden numbness",
+    # Infection
     "spreading redness", "necrotising", "cellulitis spreading",
     "infection spreading",
+    # High fever
     "high fever", "fever above 39", "fever above 40",
-    "fever over 39", "fever over 40",
+    "fever over 39", "fever over 40", "fever of 40", "fever of 39",
+    # Eye
     "eye injury", "chemical in eye", "acid in eye",
+    # Obstetric / urological
     "ectopic pregnancy", "heavy bleeding pregnancy",
     "pre-eclampsia", "testicular torsion", "ovarian torsion",
     "cannot urinate", "can't urinate", "urinary retention", "priapism",
     "peritonsillar abscess", "unable to swallow",
+    # Paediatric
     "infant fever", "baby fever", "newborn fever",
     "febrile convulsion", "child seizing",
+]
+
+# MEDIUM keywords — symptoms that should never default to LOW
+# These catch single-word or short inputs that the ML model under-classifies
+_MEDIUM_KW = [
+    # Breathing (less acute than HIGH list above, but still needs a doctor)
+    "breathing", "breath", "breathe", "inhale", "exhale", "respiratory",
+    # Vision / sight
+    "vision", "sight", "seeing", "eyesight", "blurry", "blurred",
+    "floaters", "flashes", "double vision",
+    # Chest
+    "chest", "palpitation", "palpitations", "heart racing", "heart pounding",
+    # Neurological
+    "dizzy", "dizziness", "vertigo", "fainting", "faint", "lightheaded",
+    "numbness", "tingling", "weakness", "confusion", "memory",
+    # Fever
+    "fever", "high temperature", "chills with fever",
+    # Abdomen
+    "severe pain", "severe stomach", "severe abdominal",
+    "vomiting blood", "blood in stool", "rectal bleeding",
+    # Mental health
+    "suicidal thoughts", "self harm", "self-harm", "depression", "panic attack",
+    # Infection
+    "infection", "sepsis", "cellulitis",
+    # Cardiac
+    "irregular heartbeat", "heart flutter",
+    # Paediatric
+    "baby sick", "infant sick", "child fever",
+    # General serious
+    "severe", "unbearable", "worst pain", "excruciating",
+    "swelling", "swollen",
+    "rash with fever", "jaundice", "yellow skin", "yellow eyes",
+    "blood in urine", "blood when urinating",
+    "coughing up blood", "vomiting blood",
+    "sudden", "suddenly",
 ]
 
 _SEVERITY_RANK = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
 
 
 def _keyword_override(text: str) -> str | None:
-    """Return forced severity if keywords demand it, else None."""
+    """Return forced severity if keywords demand it, else None.
+
+    Three-tier system:
+      CRITICAL — life-threatening, call emergency now
+      HIGH     — urgent, go to emergency today
+      MEDIUM   — needs a doctor, not just monitoring at home
+
+    The ML model can still return LOW for vague inputs, but anything
+    containing a real symptom word should be at least MEDIUM.
+    """
     p = text.lower()
     if any(k in p for k in _CRITICAL_KW):
         return "CRITICAL"
     if any(k in p for k in _HIGH_KW):
         return "HIGH"
+    if any(k in p for k in _MEDIUM_KW):
+        return "MEDIUM"
     return None
 
 
