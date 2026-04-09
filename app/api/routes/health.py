@@ -77,7 +77,7 @@ async def health():
                 conn.close()
                 return "ok"
             except Exception as ex:
-                return str(ex).strip()[:100]
+                return str(ex).strip()  # full error, no truncation
 
         loop = asyncio.get_event_loop()
         tasks = {r: loop.run_in_executor(None, partial(_try_pooler, r)) for r in regions}
