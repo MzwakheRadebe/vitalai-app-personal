@@ -126,18 +126,10 @@ async def me(request: Request):
 @router.get("/users", response_model=list[UserResponse])
 async def list_users(_: dict = Depends(require_roles(["admin"]))):
     """List all registered users. Admin only."""
-    settings = get_settings()
-
-    if settings.database_url:
-        import asyncpg
-        conn = await asyncpg.connect(settings.database_url)
-        rows = await conn.fetch("SELECT email, role FROM users ORDER BY email")
-        await conn.close()
-        return [{"email": r["email"], "role": r["role"]} for r in rows]
-    else:
-        import aiosqlite
-        async with aiosqlite.connect(settings.sqlite_path) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT email, role FROM users ORDER BY email") as cur:
-                rows = await cur.fetchall()
-                return [{"email": r["email"], "role": r["role"]} for r in rows]
+    from app.db_adapter import get_db
+    async with get_db() as db:
+        rows = await db.fetchall(
+            "SELECT email, role FROM users ORDER BY email", ()
+        )
+    # rows are tuples: (email, role)  [index 0 and 1]
+    return [{"email": r[0], "role": r[1]} for r in rows]

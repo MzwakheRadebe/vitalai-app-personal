@@ -51,39 +51,4 @@ async def health():
         db_status["status"] = "error"
         db_status["error"] = str(e)[:300]
 
-    # Scan Supabase pooler regions for the correct one (diagnostic)
-    if db_status["status"] == "error" and settings.supabase_url:
-        import asyncio
-        from functools import partial
-        ref = settings.supabase_url.replace("https://", "").split(".")[0]
-        import urllib.parse
-        parsed = urllib.parse.urlparse(settings.database_url)
-        pw = urllib.parse.unquote(parsed.password or "")
-
-        regions = [
-            "aws-0-us-east-1", "aws-0-us-east-2", "aws-0-us-west-1", "aws-0-us-west-2",
-            "aws-0-eu-west-1", "aws-0-eu-west-2", "aws-0-eu-central-1",
-            "aws-0-ap-southeast-1", "aws-0-ap-northeast-1", "aws-0-sa-east-1",
-        ]
-        pooler_results = {}
-        def _try_pooler(region):
-            try:
-                import psycopg2
-                conn = psycopg2.connect(
-                    host=f"{region}.pooler.supabase.com", port=6543,
-                    user=f"postgres.{ref}", password=pw,
-                    dbname="postgres", sslmode="require", connect_timeout=5,
-                )
-                conn.close()
-                return "ok"
-            except Exception as ex:
-                return str(ex).strip()  # full error, no truncation
-
-        loop = asyncio.get_event_loop()
-        tasks = {r: loop.run_in_executor(None, partial(_try_pooler, r)) for r in regions}
-        for region, task in tasks.items():
-            pooler_results[region] = await task
-
-        db_status["pooler_scan"] = pooler_results
-
     return {"status": "ok", "env": settings.env, "ai_backend": ai_status, "db": db_status}

@@ -2,10 +2,19 @@
 Database initialization and helpers.
 
 Supports two backends:
-- PostgreSQL via DATABASE_URL (Supabase or any Postgres — used in production)
-- SQLite fallback via SQLITE_PATH (local development only)
+- Supabase via supabase-py (HTTPS/REST) — production on Render
+- SQLite via aiosqlite                  — local development only
 
 Tables: users, appointments, faq
+
+For Supabase (production):
+  Table creation via the Management API or psql is required before first run
+  because PostgREST (which supabase-py uses) cannot execute DDL statements.
+  On startup this module will:
+    1. Check whether the tables already exist by querying them.
+    2. If they do not exist, log the DDL that must be run manually in the
+       Supabase SQL Editor (https://supabase.com/dashboard/project/<ref>/sql).
+  The app will continue to start regardless — it does NOT crash on missing tables.
 """
 
 from __future__ import annotations
@@ -16,8 +25,14 @@ from app.config import get_settings
 logger = logging.getLogger("db")
 
 
-# -- DDL for PostgreSQL --
-PG_CREATE_USERS_TABLE = """
+# ---------------------------------------------------------------------------
+# DDL — PostgreSQL (Supabase)
+# ---------------------------------------------------------------------------
+
+PG_DDL = """
+-- Run this in the Supabase SQL Editor:
+-- https://supabase.com/dashboard/project/{ref}/sql/new
+
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
@@ -25,9 +40,7 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL DEFAULT 'patient',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-"""
 
-PG_CREATE_APPOINTMENTS_TABLE = """
 CREATE TABLE IF NOT EXISTS appointments (
     id SERIAL PRIMARY KEY,
     patient_name TEXT NOT NULL,
@@ -39,14 +52,10 @@ CREATE TABLE IF NOT EXISTS appointments (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (starts_at < ends_at)
 );
-"""
 
-PG_CREATE_APPOINTMENTS_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_appointments_clinician_start_end
 ON appointments (clinician, starts_at, ends_at);
-"""
 
-PG_CREATE_FAQ_TABLE = """
 CREATE TABLE IF NOT EXISTS faq (
     id SERIAL PRIMARY KEY,
     question TEXT NOT NULL UNIQUE,
@@ -62,7 +71,10 @@ PG_FAQ_SEED = [
 ]
 
 
-# -- DDL for SQLite (local dev) --
+# ---------------------------------------------------------------------------
+# DDL — SQLite (local dev)
+# ---------------------------------------------------------------------------
+
 SQLITE_CREATE_USERS_TABLE = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,55 +113,162 @@ CREATE TABLE IF NOT EXISTS faq (
 """
 
 
+# ---------------------------------------------------------------------------
+# Entry point called from main.py on startup
+# ---------------------------------------------------------------------------
+
 async def init_db() -> None:
     """Initialize the database on application startup."""
     settings = get_settings()
 
-    if settings.database_url:
-        await _init_postgres(settings.database_url)
+    if settings.supabase_url and settings.supabase_service_key:
+        await _init_supabase(settings.supabase_url, settings.supabase_service_key)
     else:
-        logger.warning("DATABASE_URL not set — using SQLite fallback (local dev only)")
+        logger.warning(
+            "SUPABASE_URL / SUPABASE_SERVICE_KEY not set — "
+            "using SQLite fallback (local dev only)"
+        )
         await _init_sqlite(settings.sqlite_path)
 
 
-async def _init_postgres(database_url: str) -> None:
-    """Set up PostgreSQL tables using psycopg2-binary (pre-built wheels, no gcc needed)."""
-    import asyncio
-    from functools import partial
+# ---------------------------------------------------------------------------
+# Supabase initialisation
+# ---------------------------------------------------------------------------
+
+async def _init_supabase(supabase_url: str, service_key: str) -> None:
+    """
+    Check that the required tables exist in Supabase and seed FAQ if empty.
+
+    DDL cannot be run via PostgREST; if tables are missing we log the SQL and
+    continue — the tables must be created manually in the Supabase SQL Editor.
+    """
     try:
-        import psycopg2
+        from supabase import acreate_client, AsyncClientOptions
     except ImportError:
-        logger.error("psycopg2-binary not installed. Run: pip install psycopg2-binary")
+        logger.error(
+            "supabase package not installed. Run: pip install 'supabase==2.15.2'"
+        )
         return
 
-    def _sync_init():
-        conn = psycopg2.connect(database_url)
-        conn.autocommit = True
-        cur = conn.cursor()
-        cur.execute(PG_CREATE_USERS_TABLE)
-        cur.execute(PG_CREATE_APPOINTMENTS_TABLE)
-        cur.execute(PG_CREATE_APPOINTMENTS_INDEX)
-        cur.execute(PG_CREATE_FAQ_TABLE)
+    try:
+        client = await acreate_client(
+            supabase_url,
+            service_key,
+            options=AsyncClientOptions(
+                postgrest_client_timeout=15,
+                storage_client_timeout=15,
+            ),
+        )
+    except Exception as e:
+        logger.error("Failed to create Supabase async client: %s", e)
+        return
 
-        # Seed FAQ on first run
-        cur.execute("SELECT COUNT(*) FROM faq")
-        count = cur.fetchone()[0]
-        if count == 0:
-            for question, answer in PG_FAQ_SEED:
-                cur.execute(
-                    "INSERT INTO faq (question, answer) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                    (question, answer),
-                )
-        cur.close()
-        conn.close()
+    ref = supabase_url.replace("https://", "").split(".")[0]
+    tables_ok = True
+
+    # --- Check each table exists by doing a lightweight query ---
+    for table in ("users", "appointments", "faq"):
+        try:
+            await client.table(table).select("id").limit(1).execute()
+            logger.debug("Supabase: table %r exists.", table)
+        except Exception as e:
+            err = str(e)
+            logger.warning(
+                "Supabase: table %r does not exist or is inaccessible: %s",
+                table, err,
+            )
+            tables_ok = False
+
+    if not tables_ok:
+        ddl = PG_DDL.format(ref=ref)
+        logger.warning(
+            "\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "  ACTION REQUIRED — Supabase tables are missing.\n"
+            "  Open the Supabase SQL Editor and run the following DDL:\n"
+            "  https://supabase.com/dashboard/project/%s/sql/new\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "%s\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            ref, ddl,
+        )
+        # Try the Supabase Management API as a last resort (may not be available
+        # on all plans / keys, but worth attempting).
+        await _try_management_api_ddl(ref, service_key, ddl)
+    else:
+        # Tables exist — seed FAQ if empty
+        await _seed_faq_supabase(client)
 
     try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _sync_init)
-        logger.info("PostgreSQL database initialized successfully")
-    except Exception as e:
-        logger.error(f"PostgreSQL initialization failed: {e}")
+        await client.auth.close()
+    except Exception:
+        pass
 
+    logger.info("Supabase database check complete.")
+
+
+async def _try_management_api_ddl(ref: str, service_key: str, ddl: str) -> None:
+    """
+    Attempt to run DDL via the Supabase Management API.
+
+    This uses:  POST https://api.supabase.com/v1/projects/{ref}/database/query
+    This endpoint requires a Supabase Management API token (not the service_role
+    JWT) in the Authorization header.  We try with the service_role key anyway —
+    it will likely return a 401/403 on the free tier, but we log the outcome.
+    """
+    import httpx
+
+    url = f"https://api.supabase.com/v1/projects/{ref}/database/query"
+    headers = {
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {"query": ddl}
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.post(url, json=payload, headers=headers)
+        if resp.status_code in (200, 201):
+            logger.info(
+                "Supabase Management API: DDL executed successfully (status %s).",
+                resp.status_code,
+            )
+        else:
+            logger.warning(
+                "Supabase Management API: DDL attempt returned %s — %s. "
+                "Please run the DDL manually in the SQL Editor.",
+                resp.status_code, resp.text[:200],
+            )
+    except Exception as e:
+        logger.warning(
+            "Supabase Management API: DDL attempt failed (%s). "
+            "Please run the DDL manually in the SQL Editor.",
+            e,
+        )
+
+
+async def _seed_faq_supabase(client) -> None:
+    """Seed the FAQ table if it is empty."""
+    try:
+        resp = await client.table("faq").select("*", count="exact").execute()
+        count = resp.count if resp.count is not None else len(resp.data or [])
+
+        if count == 0:
+            rows = [{"question": q, "answer": a} for q, a in PG_FAQ_SEED]
+            # upsert with on_conflict to handle duplicates gracefully
+            await (
+                client.table("faq")
+                .upsert(rows, on_conflict="question")
+                .execute()
+            )
+            logger.info("FAQ table seeded with %d entries.", len(rows))
+    except Exception as e:
+        logger.warning("FAQ seeding failed (non-fatal): %s", e)
+
+
+# ---------------------------------------------------------------------------
+# SQLite initialisation (local dev)
+# ---------------------------------------------------------------------------
 
 async def _init_sqlite(sqlite_path: str) -> None:
     """Set up SQLite tables for local development."""
@@ -169,7 +288,7 @@ async def _init_sqlite(sqlite_path: str) -> None:
             try:
                 await db.execute(SQLITE_CREATE_APPOINTMENTS_INDEX)
             except Exception:
-                pass
+                pass  # index may already exist
             await db.execute(SQLITE_CREATE_FAQ_TABLE)
             await db.commit()
 
@@ -185,4 +304,4 @@ async def _init_sqlite(sqlite_path: str) -> None:
 
         logger.info("SQLite database initialized successfully")
     except Exception as e:
-        logger.error(f"SQLite initialization failed: {e}")
+        logger.error("SQLite initialization failed: %s", e)

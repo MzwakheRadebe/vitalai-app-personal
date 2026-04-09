@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     database_url: str = Field(default="")
     supabase_url: str = Field(default="")
     supabase_key: str = Field(default="")
+    # service_role key — bypasses Row Level Security; used by the backend only.
+    # Never expose this key to the frontend / browser.
+    supabase_service_key: str = Field(default="")
 
     # SQLite fallback (local development only)
     sqlite_path: str = Field(default="./local_offline.db")
