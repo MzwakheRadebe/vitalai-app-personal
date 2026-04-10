@@ -9,10 +9,8 @@ pydantic-settings==2.5.2
 pydantic[email]>=2.9.1
 email-validator>=2.1.0
 python-dotenv==1.0.1
-# supabase-py replaces psycopg2-binary: uses HTTPS (port 443) instead of
-# TCP port 5432, bypassing Render free-tier's inability to reach Supabase's
-# IPv6-only host.
-supabase==2.15.2
+# httpx handles Supabase PostgREST calls (already required by FastAPI ecosystem)
+# No psycopg2 or supabase-py needed — we call PostgREST REST API directly.
 aiosqlite==0.20.0
 PyJWT==2.9.0
 httpx==0.27.2

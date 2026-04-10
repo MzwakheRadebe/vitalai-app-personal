@@ -137,47 +137,42 @@ async def init_db() -> None:
 
 async def _init_supabase(supabase_url: str, service_key: str) -> None:
     """
-    Check that the required tables exist in Supabase and seed FAQ if empty.
-
-    DDL cannot be run via PostgREST; if tables are missing we log the SQL and
-    continue — the tables must be created manually in the Supabase SQL Editor.
+    Check that required tables exist in Supabase and seed FAQ if empty.
+    Uses httpx to call the PostgREST API directly (no supabase-py needed).
+    If tables are missing, logs the DDL the user must run once in the SQL Editor.
     """
-    try:
-        from supabase import acreate_client, AsyncClientOptions
-    except ImportError:
-        logger.error(
-            "supabase package not installed. Run: pip install 'supabase==2.15.2'"
-        )
-        return
+    import httpx
 
-    try:
-        client = await acreate_client(
-            supabase_url,
-            service_key,
-            options=AsyncClientOptions(
-                postgrest_client_timeout=15,
-                storage_client_timeout=15,
-            ),
-        )
-    except Exception as e:
-        logger.error("Failed to create Supabase async client: %s", e)
-        return
-
+    base = supabase_url.rstrip("/") + "/rest/v1"
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
     ref = supabase_url.replace("https://", "").split(".")[0]
     tables_ok = True
 
-    # --- Check each table exists by doing a lightweight query ---
-    for table in ("users", "appointments", "faq"):
-        try:
-            await client.table(table).select("id").limit(1).execute()
-            logger.debug("Supabase: table %r exists.", table)
-        except Exception as e:
-            err = str(e)
-            logger.warning(
-                "Supabase: table %r does not exist or is inaccessible: %s",
-                table, err,
-            )
-            tables_ok = False
+    # Check each table exists via a lightweight HEAD-like GET
+    async with httpx.AsyncClient(timeout=15) as client:
+        for table in ("users", "appointments", "faq"):
+            try:
+                r = await client.get(
+                    f"{base}/{table}",
+                    headers=headers,
+                    params={"select": "id", "limit": "1"},
+                )
+                if r.status_code == 200:
+                    logger.debug("Supabase: table %r exists.", table)
+                else:
+                    logger.warning(
+                        "Supabase: table %r returned %s: %s",
+                        table, r.status_code, r.text[:100],
+                    )
+                    tables_ok = False
+            except Exception as e:
+                logger.warning("Supabase: could not reach table %r: %s", table, e)
+                tables_ok = False
 
     if not tables_ok:
         ddl = PG_DDL.format(ref=ref)
@@ -185,24 +180,16 @@ async def _init_supabase(supabase_url: str, service_key: str) -> None:
             "\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "  ACTION REQUIRED — Supabase tables are missing.\n"
-            "  Open the Supabase SQL Editor and run the following DDL:\n"
+            "  Open the SQL Editor and run the DDL (one-time setup):\n"
             "  https://supabase.com/dashboard/project/%s/sql/new\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "%s\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
             ref, ddl,
         )
-        # Try the Supabase Management API as a last resort (may not be available
-        # on all plans / keys, but worth attempting).
         await _try_management_api_ddl(ref, service_key, ddl)
     else:
-        # Tables exist — seed FAQ if empty
-        await _seed_faq_supabase(client)
-
-    try:
-        await client.auth.close()
-    except Exception:
-        pass
+        await _seed_faq_supabase(supabase_url, service_key)
 
     logger.info("Supabase database check complete.")
 
@@ -247,21 +234,38 @@ async def _try_management_api_ddl(ref: str, service_key: str, ddl: str) -> None:
         )
 
 
-async def _seed_faq_supabase(client) -> None:
-    """Seed the FAQ table if it is empty."""
-    try:
-        resp = await client.table("faq").select("*", count="exact").execute()
-        count = resp.count if resp.count is not None else len(resp.data or [])
+async def _seed_faq_supabase(supabase_url: str, service_key: str) -> None:
+    """Seed the FAQ table if it is empty, using direct PostgREST calls."""
+    import httpx
 
-        if count == 0:
-            rows = [{"question": q, "answer": a} for q, a in PG_FAQ_SEED]
-            # upsert with on_conflict to handle duplicates gracefully
-            await (
-                client.table("faq")
-                .upsert(rows, on_conflict="question")
-                .execute()
+    base = supabase_url.rstrip("/") + "/rest/v1"
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            # Count existing FAQ entries
+            r = await client.get(
+                f"{base}/faq",
+                headers={**headers, "Prefer": "count=exact"},
+                params={"select": "id"},
             )
-            logger.info("FAQ table seeded with %d entries.", len(rows))
+            count_header = r.headers.get("content-range", "0/0").split("/")[-1]
+            count = int(count_header) if count_header.isdigit() else 0
+
+            if count == 0:
+                rows = [{"question": q, "answer": a} for q, a in PG_FAQ_SEED]
+                ins_headers = {**headers,
+                               "Prefer": "return=representation,resolution=ignore-duplicates"}
+                r2 = await client.post(f"{base}/faq", headers=ins_headers, json=rows)
+                if r2.status_code in (200, 201):
+                    logger.info("FAQ table seeded with %d entries.", len(rows))
+                else:
+                    logger.warning("FAQ seed returned %s: %s", r2.status_code, r2.text[:100])
     except Exception as e:
         logger.warning("FAQ seeding failed (non-fatal): %s", e)
 
