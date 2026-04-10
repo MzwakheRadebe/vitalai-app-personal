@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ChatInterface from '../components/ChatInterface';
-import { appointmentsAPI } from '../services/api';
+import { appointmentsAPI, staffAPI } from '../services/api';
 import './StaffDashboard.css';
 
 const SEVERITY_COLOR = {
@@ -36,12 +36,22 @@ const StaffDashboard = () => {
   const [activeTab, setActiveTab] = useState('appointments');
   const [appointments, setAppointments] = useState([]);
   const [loadingAppts, setLoadingAppts] = useState(false);
+  const [doctorInfo, setDoctorInfo] = useState(null); // { name, department }
+
+  // Look up this staff user in the doctors list
+  useEffect(() => {
+    staffAPI.getDoctors().then(list => {
+      const match = list.find(d => d.email === user?.email);
+      if (match) setDoctorInfo(match);
+    }).catch(() => {});
+  }, [user]);
 
   const handleLogout = () => {
     logout();
     navigate('/');
   };
 
+  // Backend auto-filters by doctor when role=staff, so no extra param needed
   const loadAppointments = async () => {
     setLoadingAppts(true);
     try {
@@ -58,7 +68,8 @@ const StaffDashboard = () => {
     if (activeTab === 'appointments') loadAppointments();
   }, [activeTab]);
 
-  const name = user?.name || user?.email?.split('@')[0] || 'Staff';
+  const displayName = doctorInfo?.name || user?.email?.split('@')[0] || 'Staff';
+  const displayDept = doctorInfo?.department || null;
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
@@ -94,11 +105,13 @@ const StaffDashboard = () => {
               background: '#667eea', display: 'flex', alignItems: 'center',
               justifyContent: 'center', color: '#fff', fontSize: '14px', fontWeight: 600,
             }}>
-              {name[0].toUpperCase()}
+              {displayName[0].toUpperCase()}
             </div>
             <div style={{ lineHeight: 1.3 }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#1f2937' }}>{name}</div>
-              <div style={{ fontSize: '11px', color: '#667eea', fontWeight: 500 }}>Staff</div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#1f2937' }}>{displayName}</div>
+              <div style={{ fontSize: '11px', color: '#667eea', fontWeight: 500 }}>
+                {displayDept || 'Staff'}
+              </div>
             </div>
           </div>
           <button
@@ -147,9 +160,16 @@ const StaffDashboard = () => {
         {activeTab === 'appointments' && (
           <div style={{ padding: '24px 20px', maxWidth: '900px', margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1f2937' }}>
-                All Appointments
-              </h2>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#1f2937' }}>
+                  {doctorInfo ? 'My Appointments' : 'All Appointments'}
+                </h2>
+                {doctorInfo && (
+                  <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>
+                    {doctorInfo.name} · {doctorInfo.department}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={loadAppointments}
                 style={{

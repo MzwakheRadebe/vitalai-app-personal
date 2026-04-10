@@ -136,68 +136,34 @@ const Home = () => {
   if (currentView === 'chat') {
     const userType = user ? (user.role || user.userType || 'patient') : 'patient';
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <div className="chat-view-wrapper">
         {/* Top nav bar */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 20px',
-          background: '#ffffff',
-          borderBottom: '1px solid #e5e7eb',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-          flexShrink: 0,
-        }}>
-          <button
-            onClick={() => setCurrentView('welcome')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: '#6b7280', fontSize: '14px', padding: '6px 10px',
-              borderRadius: '6px', transition: 'background 0.2s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
-            onMouseLeave={e => e.currentTarget.style.background = 'none'}
-          >
-            <ArrowLeft size={16} /> Back to Home
+        <div className="chat-view-nav">
+          <button className="chat-nav-back" onClick={() => setCurrentView('welcome')}>
+            <ArrowLeft size={16} />
+            <span className="chat-nav-back-text">Back to Home</span>
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: '#1f2937' }}>
+          <div className="chat-nav-logo">
             <Stethoscope size={20} color="#667eea" />
-            VitalAI
+            <span>VitalAI</span>
           </div>
 
           {user ? (
-            <button
-              onClick={handleLogout}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                background: 'none', border: '1px solid #e5e7eb', cursor: 'pointer',
-                color: '#6b7280', fontSize: '14px', padding: '6px 12px',
-                borderRadius: '6px', transition: 'background 0.2s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}
-            >
-              <LogOut size={14} /> Sign out
+            <button className="chat-nav-action" onClick={handleLogout}>
+              <LogOut size={14} />
+              <span className="chat-nav-action-text">Sign out</span>
             </button>
           ) : (
-            <button
-              onClick={() => setCurrentView('login')}
-              style={{
-                background: '#667eea', color: '#fff', border: 'none',
-                padding: '6px 14px', borderRadius: '6px', cursor: 'pointer',
-                fontSize: '14px', fontWeight: 500,
-              }}
-            >
+            <button className="chat-nav-action chat-nav-action--primary" onClick={() => setCurrentView('login')}>
               Sign in
             </button>
           )}
         </div>
 
         {/* Chat takes the rest of the height */}
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <ChatInterface userType={userType} />
+        <div className="chat-view-body">
+          <ChatInterface userType={userType} onSignInRequired={() => setCurrentView('login')} />
         </div>
       </div>
     );

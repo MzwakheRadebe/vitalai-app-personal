@@ -51,8 +51,10 @@ const Register = ({ onSwitchToLogin, onBack }) => {
         setError(err.response.data.message);
       } else if (err.response?.status === 409) {
         setError('An account with this email already exists. Please sign in.');
+      } else if (!err.response) {
+        setError('Cannot reach the server. Check your internet connection or try again shortly — the server may be waking up.');
       } else {
-        setError('Sign up failed. Please check your details and try again.');
+        setError(`Sign up failed (${err.response?.status || 'unknown error'}). Please try again.`);
       }
     } finally {
       setIsLoading(false);

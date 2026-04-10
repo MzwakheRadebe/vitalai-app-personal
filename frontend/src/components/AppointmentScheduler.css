@@ -2,10 +2,76 @@
   background: white;
   border-radius: 16px;
   width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
+  max-width: 540px;
+  max-height: 92vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+/* Doctor selection grid */
+.doctor-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.doctor-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: white;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  width: 100%;
+}
+
+.doctor-card:hover {
+  border-color: #667eea;
+  background: #f5f3ff;
+}
+
+.doctor-card.selected {
+  border-color: #667eea;
+  background: #eef2ff;
+}
+
+.doctor-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #667eea;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.doctor-card.selected .doctor-avatar {
+  background: #4f46e5;
+}
+
+.doctor-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.doctor-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.doctor-dept {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .appointment-form {
@@ -127,14 +193,101 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   padding-right: 40px;
 }
 
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.btn-primary {
+  background: #667eea;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #5a6fd8;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: none;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
 @media (max-width: 480px) {
   .form-row {
     grid-template-columns: 1fr;
     gap: 0;
   }
-  
+
   .appointment-modal {
-    margin: 20px;
-    width: calc(100% - 40px);
+    margin: 16px;
+    width: calc(100% - 32px);
+    max-height: 92vh;
+  }
+
+  .modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    width: 100%;
+    padding: 12px;
+    text-align: center;
   }
 }

@@ -31,8 +31,12 @@ const Login = ({ onLogin, onSwitchToRegister, onBack }) => {
       const userData = await login(formData.email, formData.password);
       onLogin(userData);
     } catch (err) {
-      const msg = err?.response?.data?.detail || 'Invalid email or password. Please try again.';
-      setError(msg);
+      if (!err.response) {
+        setError('Cannot reach the server. Check your connection or try again shortly — the server may be waking up.');
+      } else {
+        const msg = err?.response?.data?.detail || 'Invalid email or password. Please try again.';
+        setError(msg);
+      }
     } finally {
       setIsLoading(false);
     }

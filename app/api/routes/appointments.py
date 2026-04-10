@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from app.db_adapter import get_db
 from app.security import get_current_user
+from app.doctors import DOCTOR_BY_EMAIL
 
 router = APIRouter(prefix="/appointments")
 
@@ -100,15 +101,24 @@ async def list_appointments(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     response: Response = None,
-    _: dict = Depends(get_current_user),  # Auth required
+    current_user: dict = Depends(get_current_user),  # Auth required
 ):
-    """List appointments. Requires authentication."""
+    """List appointments. Staff see only their own; admins see all."""
+    # If the caller is a staff/doctor, automatically scope to their appointments
+    effective_clinician = clinician
+    role = current_user.get("role", "patient")
+    if role == "staff":
+        email = current_user.get("sub", "")
+        doctor = DOCTOR_BY_EMAIL.get(email)
+        if doctor:
+            effective_clinician = doctor["name"]
+
     async with get_db() as db:
         conds: list[str] = []
         filter_params: list = []
-        if clinician:
+        if effective_clinician:
             conds.append("clinician = ?")
-            filter_params.append(clinician)
+            filter_params.append(effective_clinician)
         if start_from:
             conds.append("starts_at >= ?")
             filter_params.append(start_from)

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 from app.config import get_settings
+from app.doctors import DOCTORS, DOCTOR_PASSWORD
 
 logger = logging.getLogger("db")
 
@@ -190,6 +191,7 @@ async def _init_supabase(supabase_url: str, service_key: str) -> None:
         await _try_management_api_ddl(ref, service_key, ddl)
     else:
         await _seed_faq_supabase(supabase_url, service_key)
+        await _seed_doctors_supabase(supabase_url, service_key)
 
     logger.info("Supabase database check complete.")
 
@@ -270,6 +272,42 @@ async def _seed_faq_supabase(supabase_url: str, service_key: str) -> None:
         logger.warning("FAQ seeding failed (non-fatal): %s", e)
 
 
+async def _seed_doctors_supabase(supabase_url: str, service_key: str) -> None:
+    """Create the 7 doctor accounts in Supabase if they do not already exist."""
+    import httpx
+    from app.security import hash_password
+
+    base = supabase_url.rstrip("/") + "/rest/v1"
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation,resolution=ignore-duplicates",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            for doc in DOCTORS:
+                # Check if already exists
+                r = await client.get(
+                    f"{base}/users",
+                    headers={**headers, "Prefer": "return=representation"},
+                    params={"select": "id", "email": f"eq.{doc['email']}"},
+                )
+                if r.status_code == 200 and r.json():
+                    continue  # already seeded
+                hashed = hash_password(DOCTOR_PASSWORD)
+                row = {"email": doc["email"], "password_hash": hashed, "role": "staff"}
+                r2 = await client.post(f"{base}/users", headers=headers, json=row)
+                if r2.status_code in (200, 201):
+                    logger.info("Doctor account seeded: %s", doc["email"])
+                else:
+                    logger.warning("Doctor seed %s returned %s: %s",
+                                   doc["email"], r2.status_code, r2.text[:80])
+    except Exception as e:
+        logger.warning("Doctor seeding failed (non-fatal): %s", e)
+
+
 # ---------------------------------------------------------------------------
 # SQLite initialisation (local dev)
 # ---------------------------------------------------------------------------
@@ -305,6 +343,21 @@ async def _init_sqlite(sqlite_path: str) -> None:
                     PG_FAQ_SEED,
                 )
                 await db.commit()
+
+            # Seed doctor accounts
+            from app.security import hash_password
+            for doc in DOCTORS:
+                async with db.execute(
+                    "SELECT id FROM users WHERE email = ?", (doc["email"],)
+                ) as cur:
+                    exists = await cur.fetchone()
+                if not exists:
+                    hashed = hash_password(DOCTOR_PASSWORD)
+                    await db.execute(
+                        "INSERT OR IGNORE INTO users (email, password_hash, role) VALUES (?, ?, ?)",
+                        (doc["email"], hashed, "staff"),
+                    )
+            await db.commit()
 
         logger.info("SQLite database initialized successfully")
     except Exception as e:

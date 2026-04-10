@@ -38,7 +38,7 @@ const RenderText = ({ text }) => (
   </div>
 );
 
-const ChatInterface = () => {
+const ChatInterface = ({ onSignInRequired } = {}) => {
   const [messages, setMessages] = useState([{
     id: 1,
     text: "Hello! I'm **VitalAI**, your medical triage assistant.\n\nDescribe your symptoms and I'll assess their severity and advise on the right next steps. Type freely or tap a quick option below to get started.",
@@ -259,6 +259,7 @@ const ChatInterface = () => {
         <AppointmentScheduler
           onSchedule={handleAppointmentSchedule}
           onClose={() => setShowAppointmentScheduler(false)}
+          onSignInRequired={() => { setShowAppointmentScheduler(false); if (onSignInRequired) onSignInRequired(); }}
         />
       )}
     </div>
