@@ -13,6 +13,7 @@ response so the rest of the API and docs remain functional.
 """
 
 from fastapi import APIRouter, HTTPException, Request
+from typing import Optional
 from pydantic import BaseModel, Field
 import httpx
 import logging
@@ -32,15 +33,27 @@ _rate_state: dict[str, tuple[float, int]] = {}
 
 
 class ChatRequest(BaseModel):
-    """Incoming chat request with a single `prompt`.
+    """Incoming chat request.
 
-    Keep this simple; downstream AI services can format complex prompts
-    themselves. If we need system/assistant roles later, extend here.
+    Accepts either 'prompt' or 'message' so both the Swagger UI and the
+    React frontend (which sends 'message') work without changes.
     """
-    prompt: str = Field(
-        ..., min_length=1, max_length=1000,
+    prompt: Optional[str] = Field(
+        default=None, min_length=1, max_length=1000,
         description="User message (1–1000 characters)."
     )
+    message: Optional[str] = Field(
+        default=None, min_length=1, max_length=1000,
+        description="Alias for prompt — accepted from the React frontend."
+    )
+    session_id: Optional[str] = Field(default=None, max_length=100)
+
+    def get_prompt(self) -> str:
+        """Return whichever of prompt / message was supplied."""
+        text = self.prompt or self.message
+        if not text:
+            raise ValueError("Either 'prompt' or 'message' must be provided.")
+        return text.strip()
 
 
 class ChatResponse(BaseModel):
@@ -57,7 +70,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     base = settings.ai_service_url.rstrip("/")
 
     # Basic input validation (extra safety beyond Pydantic constraints)
-    p = req.prompt.strip()
+    p = req.get_prompt()
     if not p:
         raise HTTPException(status_code=400, detail="Prompt cannot be empty")
     if len(p) > 1000:

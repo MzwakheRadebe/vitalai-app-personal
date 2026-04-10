@@ -76,6 +76,12 @@ def _validate_times(starts_at: str, ends_at: str) -> tuple[datetime, datetime]:
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid ISO8601 datetime format")
 
+    # Make timezone-aware for comparison (treat naive datetimes as UTC)
+    if start_dt.tzinfo is None:
+        start_dt = start_dt.replace(tzinfo=timezone.utc)
+    if end_dt.tzinfo is None:
+        end_dt = end_dt.replace(tzinfo=timezone.utc)
+
     if start_dt < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Cannot book appointments in the past")
     if end_dt <= start_dt:
