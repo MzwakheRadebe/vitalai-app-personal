@@ -1,14 +1,113 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Stethoscope, MessageCircle, Calendar, Upload, Users, Shield, ArrowLeft, LogOut } from 'lucide-react';
+import { Stethoscope, MessageCircle, Calendar, Upload, Users, Shield, ArrowLeft, LogOut, X, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import ChatInterface from '../components/ChatInterface';
 import Login from '../components/Login';
 import Register from '../components/Register';
 import { useAuth } from '../contexts/AuthContext';
+import { faqAPI } from '../services/api';
 import './Home.css';
+
+/* ── FAQ Modal ─────────────────────────────────────────────────────────────── */
+const FAQModal = ({ onClose }) => {
+  const [faqs, setFaqs] = useState([]);
+  const [open, setOpen] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    faqAPI.list()
+      .then(data => setFaqs(data))
+      .catch(() => setFaqs([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 9999, padding: '20px',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '600px',
+          maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '20px 24px 16px', borderBottom: '1px solid #e5e7eb',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <HelpCircle size={22} color="#667eea" />
+            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1f2937' }}>
+              Frequently Asked Questions
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#9ca3af', padding: '4px', borderRadius: '6px',
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', padding: '16px 24px 24px' }}>
+          {loading ? (
+            <p style={{ color: '#6b7280', textAlign: 'center', padding: '24px 0' }}>Loading…</p>
+          ) : faqs.length === 0 ? (
+            <p style={{ color: '#6b7280', textAlign: 'center', padding: '24px 0' }}>No FAQs available yet.</p>
+          ) : (
+            faqs.map((faq, i) => (
+              <div
+                key={faq.id || i}
+                style={{
+                  borderBottom: '1px solid #f3f4f6', paddingBottom: '4px', marginBottom: '4px',
+                }}
+              >
+                <button
+                  onClick={() => setOpen(open === i ? null : i)}
+                  style={{
+                    width: '100%', display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'center', padding: '14px 0', background: 'none',
+                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                    color: '#1f2937', fontWeight: open === i ? 600 : 500, fontSize: '15px',
+                  }}
+                >
+                  {faq.question}
+                  {open === i
+                    ? <ChevronUp size={18} color="#667eea" />
+                    : <ChevronDown size={18} color="#9ca3af" />}
+                </button>
+                {open === i && (
+                  <p style={{
+                    margin: '0 0 14px', color: '#4b5563', fontSize: '14px',
+                    lineHeight: 1.65, paddingLeft: '2px',
+                  }}>
+                    {faq.answer}
+                  </p>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Home = () => {
   const [currentView, setCurrentView] = useState('welcome');
+  const [showFaq, setShowFaq] = useState(false);
   const navigate = useNavigate();
   const { user: authUser, logout: authLogout } = useAuth();
 
@@ -264,6 +363,7 @@ const Home = () => {
                 <li><button onClick={() => setCurrentView('chat')} className="footer-link-btn">Start Chat</button></li>
                 <li><button onClick={() => setCurrentView('register')} className="footer-link-btn">Create Account</button></li>
                 <li><button onClick={() => setCurrentView('login')} className="footer-link-btn">Staff Login</button></li>
+                <li><button onClick={() => setShowFaq(true)} className="footer-link-btn">FAQ</button></li>
               </ul>
             </div>
 
@@ -317,6 +417,9 @@ const Home = () => {
           </div>
         </div>
       </footer>
+
+      {/* FAQ Modal — rendered on top of everything */}
+      {showFaq && <FAQModal onClose={() => setShowFaq(false)} />}
     </div>
   );
 };
