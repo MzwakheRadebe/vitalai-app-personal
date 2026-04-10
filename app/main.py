@@ -60,8 +60,12 @@ async def on_startup():
         missing = []
         if not settings.jwt_secret:
             missing.append("JWT_SECRET")
-        if not settings.database_url:
-            missing.append("DATABASE_URL")
+        # Accept either Supabase REST (SUPABASE_URL + SUPABASE_SERVICE_KEY)
+        # or a direct DATABASE_URL — at least one DB config must be present
+        has_supabase = bool(settings.supabase_url and settings.supabase_service_key)
+        has_direct_db = bool(settings.database_url)
+        if not has_supabase and not has_direct_db:
+            missing.append("SUPABASE_URL+SUPABASE_SERVICE_KEY (or DATABASE_URL)")
         if not settings.allowed_origins or settings.allowed_origins == "*":
             missing.append("ALLOWED_ORIGINS (must not be * in production)")
         if missing:
