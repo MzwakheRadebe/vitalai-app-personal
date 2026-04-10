@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, User, Stethoscope } from 'lucide-react';
 import './Login.css';
-import { toast } from 'react-hot-toast';
 import { authAPI } from '../services/api';
 
-const Register = ({ onSwitchToLogin }) => {
+const Register = ({ onSwitchToLogin, onBack }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -13,26 +12,48 @@ const Register = ({ onSwitchToLogin }) => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
   const handleInputChange = (field, value) => {
+    setError('');
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.password !== formData.confirmPassword) {
-      toast.error('Passwords do not match');
+    setError('');
+
+    // Client-side validation
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters.');
       return;
     }
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       await authAPI.register(formData.email, formData.password, formData.userType);
-      toast.success('Account created. Please sign in');
-      onSwitchToLogin?.();
+      setSuccess(true);
+      // Auto-redirect to login after 1.5 seconds
+      setTimeout(() => onSwitchToLogin?.(), 1500);
     } catch (err) {
-      const status = err.response?.status;
-      const serverMsg = err.response?.data?.message || err.response?.data?.detail;
-      toast.error(serverMsg ? `${serverMsg}${status ? ` (${status})` : ''}` : 'Sign up failed');
+      const detail = err.response?.data?.detail;
+      // Pydantic returns detail as array or string
+      if (Array.isArray(detail)) {
+        setError(detail.map(d => d.msg).join(' · '));
+      } else if (typeof detail === 'string') {
+        setError(detail);
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.response?.status === 409) {
+        setError('An account with this email already exists. Please sign in.');
+      } else {
+        setError('Sign up failed. Please check your details and try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -41,6 +62,18 @@ const Register = ({ onSwitchToLogin }) => {
   return (
     <div className="login-container">
       <div className="login-card">
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#6b7280', fontSize: '13px', marginBottom: '12px', padding: 0,
+            }}
+          >
+            ← Back to Home
+          </button>
+        )}
         <div className="login-header">
           <div className="logo">
             <Stethoscope size={32} />
@@ -96,7 +129,8 @@ const Register = ({ onSwitchToLogin }) => {
                 type={showPassword ? 'text' : 'password'}
                 value={formData.password}
                 onChange={(e) => handleInputChange('password', e.target.value)}
-                placeholder="Enter your password"
+                placeholder="Min. 8 characters"
+                minLength={8}
                 required
               />
               <button
@@ -124,12 +158,32 @@ const Register = ({ onSwitchToLogin }) => {
             </div>
           </div>
 
-          <button 
-            type="submit" 
+          {/* Success message */}
+          {success && (
+            <div style={{
+              background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px',
+              padding: '12px 14px', marginBottom: '12px', color: '#15803d', fontSize: '14px',
+            }}>
+              ✅ Account created! Redirecting to sign in…
+            </div>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <div style={{
+              background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px',
+              padding: '12px 14px', marginBottom: '12px', color: '#dc2626', fontSize: '14px',
+            }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
             className="login-btn"
-            disabled={isLoading}
+            disabled={isLoading || success}
           >
-            {isLoading ? 'Creating account...' : 'Sign up'}
+            {isLoading ? 'Creating account…' : 'Sign up'}
           </button>
         </form>
 
