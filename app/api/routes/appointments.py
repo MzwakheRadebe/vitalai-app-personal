@@ -14,7 +14,6 @@ class AppointmentCreate(BaseModel):
     clinician: str = Field(min_length=1, max_length=100)
     department: Optional[str] = Field(default=None, max_length=100)
     starts_at: str = Field(description="ISO8601 start time")
-    ends_at: str = Field(description="ISO8601 end time")
     reason: Optional[str] = Field(default=None, max_length=500)
     model_config = ConfigDict(json_schema_extra={
         "example": {
@@ -22,7 +21,6 @@ class AppointmentCreate(BaseModel):
             "clinician": "Dr. Smith",
             "department": "General Practice",
             "starts_at": "2025-10-13T09:00:00Z",
-            "ends_at": "2025-10-13T09:30:00Z",
             "reason": "Persistent headache"
         }
     })
@@ -148,21 +146,30 @@ async def create_appointment(
     _: dict = Depends(get_current_user),  # Auth required
 ):
     """Create a new appointment. Requires authentication."""
-    _validate_times(req.starts_at, req.ends_at)
+    # Auto-compute ends_at as starts_at + 1 hour (internal scheduling block)
+    try:
+        start_dt = datetime.fromisoformat(req.starts_at.replace("Z", "+00:00"))
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ISO8601 datetime format")
+    if start_dt < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Cannot book appointments in the past")
+    ends_at = (start_dt + timedelta(hours=1)).isoformat()
 
     async with get_db() as db:
         count_row = await db.fetchone(
             "SELECT COUNT(*) FROM appointments "
             "WHERE clinician = ? AND NOT (ends_at <= ? OR starts_at >= ?)",
-            (req.clinician, req.starts_at, req.ends_at),
+            (req.clinician, req.starts_at, ends_at),
         )
         if (count_row[0] if count_row else 0) > 0:
-            raise HTTPException(status_code=409, detail="Appointment conflicts with existing booking")
+            raise HTTPException(status_code=409, detail="That time slot is already booked for this doctor. Please choose another time.")
 
         new_id = await db.insert(
             "INSERT INTO appointments (patient_name, clinician, department, starts_at, ends_at, reason) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (req.patient_name, req.clinician, req.department, req.starts_at, req.ends_at, req.reason),
+            (req.patient_name, req.clinician, req.department, req.starts_at, ends_at, req.reason),
         )
         await db.commit()
 

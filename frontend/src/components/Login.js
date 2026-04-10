@@ -1,41 +1,65 @@
-import React, { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, User, Stethoscope } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Lock, Eye, EyeOff, User, Stethoscope, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { staffAPI } from '../services/api';
 import './Login.css';
 
 const Login = ({ onLogin, onSwitchToRegister, onBack }) => {
-  const { login } = useAuth();
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    userType: 'patient'
-  });
+  const { login, staffLogin } = useAuth();
+  const [userType, setUserType] = useState('patient');
+
+  // Patient form state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Staff form state
+  const [doctors, setDoctors] = useState([]);
+  const [selectedDoctor, setSelectedDoctor] = useState('');
+  const [accessCode, setAccessCode] = useState('');
+  const [showCode, setShowCode] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleInputChange = (field, value) => {
+  // Load doctor list when staff tab is selected
+  useEffect(() => {
+    if (userType === 'staff' && doctors.length === 0) {
+      staffAPI.getDoctors()
+        .then(setDoctors)
+        .catch(() => setDoctors([]));
+    }
+  }, [userType, doctors.length]);
+
+  const handleTabChange = (type) => {
     setError('');
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setUserType(type);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
     setError('');
+    setIsLoading(true);
 
     try {
-      const userData = await login(formData.email, formData.password);
-      onLogin(userData);
+      if (userType === 'staff') {
+        if (!selectedDoctor) {
+          setError('Please select your name from the list.');
+          setIsLoading(false);
+          return;
+        }
+        const userData = await staffLogin(selectedDoctor, accessCode);
+        onLogin(userData);
+      } else {
+        const userData = await login(email, password);
+        onLogin(userData);
+      }
     } catch (err) {
       if (!err.response) {
         setError('Cannot reach the server. Check your connection or try again shortly — the server may be waking up.');
       } else {
-        const msg = err?.response?.data?.detail || 'Invalid email or password. Please try again.';
-        setError(msg);
+        const detail = err?.response?.data?.detail;
+        setError(typeof detail === 'string' ? detail : 'Sign in failed. Please check your details.');
       }
     } finally {
       setIsLoading(false);
@@ -57,6 +81,7 @@ const Login = ({ onLogin, onSwitchToRegister, onBack }) => {
             ← Back to Home
           </button>
         )}
+
         <div className="login-header">
           <div className="logo">
             <Stethoscope size={32} />
@@ -66,98 +91,157 @@ const Login = ({ onLogin, onSwitchToRegister, onBack }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
+
+          {/* User type tab selector */}
           <div className="form-group">
             <label>User Type</label>
             <div className="user-type-selector">
               <button
                 type="button"
-                className={`user-type-btn ${formData.userType === 'patient' ? 'active' : ''}`}
-                onClick={() => handleInputChange('userType', 'patient')}
+                className={`user-type-btn ${userType === 'patient' ? 'active' : ''}`}
+                onClick={() => handleTabChange('patient')}
               >
-                <User size={16} />
-                Patient
+                <User size={16} /> Patient
               </button>
               <button
                 type="button"
-                className={`user-type-btn ${formData.userType === 'staff' ? 'active' : ''}`}
-                onClick={() => handleInputChange('userType', 'staff')}
+                className={`user-type-btn ${userType === 'staff' ? 'active' : ''}`}
+                onClick={() => handleTabChange('staff')}
               >
-                <Stethoscope size={16} />
-                Staff
+                <Stethoscope size={16} /> Staff
               </button>
             </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="email">Email Address</label>
-            <div className="input-wrapper">
-              <Mail size={18} className="input-icon" />
-              <input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
-                placeholder="Enter your email"
-                required
-              />
-            </div>
-          </div>
+          {/* ── Patient fields ── */}
+          {userType === 'patient' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="email">Email Address</label>
+                <div className="input-wrapper">
+                  <Mail size={18} className="input-icon" />
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={e => { setError(''); setEmail(e.target.value); }}
+                    placeholder="Enter your email"
+                    required
+                  />
+                </div>
+              </div>
 
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <div className="input-wrapper">
-              <Lock size={18} className="input-icon" />
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={formData.password}
-                onChange={(e) => handleInputChange('password', e.target.value)}
-                placeholder="Enter your password"
-                required
-              />
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
+              <div className="form-group">
+                <label htmlFor="password">Password</label>
+                <div className="input-wrapper">
+                  <Lock size={18} className="input-icon" />
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => { setError(''); setPassword(e.target.value); }}
+                    placeholder="Enter your password"
+                    required
+                  />
+                  <button type="button" className="password-toggle" onClick={() => setShowPassword(v => !v)}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
 
-          <div className="form-options">
-            <label className="checkbox-label">
-              <input type="checkbox" />
-              <span className="checkmark"></span>
-              Remember me
-            </label>
-            <a href="#forgot" className="forgot-link">Forgot password?</a>
-          </div>
+              <div className="form-options">
+                <label className="checkbox-label">
+                  <input type="checkbox" />
+                  <span className="checkmark"></span>
+                  Remember me
+                </label>
+                <a href="#forgot" className="forgot-link">Forgot password?</a>
+              </div>
+            </>
+          )}
 
+          {/* ── Staff fields ── */}
+          {userType === 'staff' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="doctor-select">Select Your Name</label>
+                <div className="input-wrapper" style={{ position: 'relative' }}>
+                  <Stethoscope size={18} className="input-icon" />
+                  <select
+                    id="doctor-select"
+                    value={selectedDoctor}
+                    onChange={e => { setError(''); setSelectedDoctor(e.target.value); }}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 2.5rem 0.75rem 2.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.75rem',
+                      fontSize: '0.875rem',
+                      background: 'white',
+                      appearance: 'none',
+                      cursor: 'pointer',
+                      minHeight: '44px',
+                    }}
+                  >
+                    <option value="">— Select doctor —</option>
+                    {doctors.map(d => (
+                      <option key={d.email} value={d.email}>
+                        {d.name} · {d.department}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={16}
+                    style={{ position: 'absolute', right: '1rem', color: '#9ca3af', pointerEvents: 'none' }}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="access-code">Staff Access Code</label>
+                <div className="input-wrapper">
+                  <Lock size={18} className="input-icon" />
+                  <input
+                    id="access-code"
+                    type={showCode ? 'text' : 'password'}
+                    value={accessCode}
+                    onChange={e => { setError(''); setAccessCode(e.target.value); }}
+                    placeholder="Enter staff access code"
+                    required
+                  />
+                  <button type="button" className="password-toggle" onClick={() => setShowCode(v => !v)}>
+                    {showCode ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
+                  The access code is provided by your admin.
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* Error */}
           {error && (
-            <div className="error-message" style={{ color: '#dc2626', marginBottom: '12px', fontSize: '14px' }}>
+            <div style={{
+              background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px',
+              padding: '10px 14px', color: '#dc2626', fontSize: '14px',
+            }}>
               ⚠️ {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            className="login-btn"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Signing in...' : 'Sign in'}
+          <button type="submit" className="login-btn" disabled={isLoading}>
+            {isLoading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
 
         <div className="login-footer">
           <p>
             Don't have an account?{' '}
-            <button className="switch-link" onClick={onSwitchToRegister}>
-              Sign up
-            </button>
+            <button className="switch-link" onClick={onSwitchToRegister}>Sign up</button>
           </p>
         </div>
-
       </div>
     </div>
   );

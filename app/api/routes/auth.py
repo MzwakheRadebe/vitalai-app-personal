@@ -7,6 +7,7 @@ Users are persisted in the database (PostgreSQL or SQLite).
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, Depends
+from typing import Optional
 from pydantic import BaseModel, Field, EmailStr
 
 from app.security import (
@@ -17,6 +18,7 @@ from app.security import (
     require_roles,
 )
 from app.config import get_settings
+from app.doctors import DOCTOR_BY_EMAIL, STAFF_ACCESS_CODE
 
 router = APIRouter(prefix="/auth")
 logger = logging.getLogger("auth")
@@ -44,6 +46,13 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     role: str = "patient"  # Returned so frontend can set role-based routing
+    name: Optional[str] = None
+    department: Optional[str] = None
+
+
+class StaffLoginRequest(BaseModel):
+    doctor_email: str
+    access_code: str
 
 
 class UserResponse(BaseModel):
@@ -133,3 +142,26 @@ async def list_users(_: dict = Depends(require_roles(["admin"]))):
         )
     # rows are tuples: (email, role)  [index 0 and 1]
     return [{"email": r[0], "role": r[1]} for r in rows]
+
+
+@router.post("/staff-login", response_model=TokenResponse)
+async def staff_login(req: StaffLoginRequest):
+    """
+    Staff login using doctor selection + universal access code.
+    No personal password needed — doctors pick their name and enter the shared code.
+    """
+    if req.access_code != STAFF_ACCESS_CODE:
+        raise HTTPException(status_code=401, detail="Invalid staff access code")
+
+    doctor = DOCTOR_BY_EMAIL.get(req.doctor_email.lower().strip())
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+
+    token = create_access_token(subject=doctor["email"], role="staff")
+    logger.info("Staff login: %s (%s)", doctor["name"], doctor["department"])
+    return TokenResponse(
+        access_token=token,
+        role="staff",
+        name=doctor["name"],
+        department=doctor["department"],
+    )

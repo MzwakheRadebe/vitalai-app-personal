@@ -53,9 +53,6 @@ const AppointmentScheduler = ({ onSchedule, onClose, onSignInRequired }) => {
     setIsLoading(true);
     try {
       const startsAt = `${formData.date}T${formData.time}:00`;
-      const startDate = new Date(startsAt);
-      const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
-      const endsAt = endDate.toISOString().slice(0, 19);
 
       const payload = {
         patient_name: formData.patientName,
@@ -63,7 +60,6 @@ const AppointmentScheduler = ({ onSchedule, onClose, onSignInRequired }) => {
         department: selectedDoctor.department,
         reason: formData.reason || null,
         starts_at: startsAt,
-        ends_at: endsAt,
       };
 
       const result = await appointmentsAPI.create(payload);

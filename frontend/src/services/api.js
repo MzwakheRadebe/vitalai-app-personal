@@ -58,6 +58,14 @@ export const authAPI = {
     const response = await api.get('/api/auth/me');
     return response.data;
   },
+
+  staffLogin: async (doctorEmail, accessCode) => {
+    const response = await api.post('/api/auth/staff-login', {
+      doctor_email: doctorEmail,
+      access_code: accessCode,
+    });
+    return response.data;
+  },
 };
 
 // ---------------------------------------------------------------------------

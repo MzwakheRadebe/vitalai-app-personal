@@ -21,3 +21,6 @@ DOCTOR_PASSWORD = "Doctor2024!"
 
 # Fast lookup: email → doctor record
 DOCTOR_BY_EMAIL: dict = {d["email"]: d for d in DOCTORS}
+
+# Universal staff access code — given verbally by admin to all doctors
+STAFF_ACCESS_CODE = "STAFF-VITALAI-2024"

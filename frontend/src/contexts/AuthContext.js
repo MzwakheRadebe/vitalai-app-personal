@@ -61,6 +61,26 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
+   * Staff login: doctor selector + universal access code.
+   * Returns user object on success, throws on failure.
+   */
+  const staffLogin = async (doctorEmail, accessCode) => {
+    const data = await authAPI.staffLogin(doctorEmail, accessCode);
+    const token = data.access_token;
+    const userData = {
+      email: doctorEmail,
+      token,
+      role: 'staff',
+      name: data.name || doctorEmail.split('@')[0],
+      department: data.department || null,
+    };
+    localStorage.setItem('vitalai_token', token);
+    localStorage.setItem('vitalai_user', JSON.stringify(userData));
+    setUser(userData);
+    return userData;
+  };
+
+  /**
    * Register: creates account, then auto-logs in.
    */
   const register = async (email, password, role = 'patient') => {
@@ -81,6 +101,7 @@ export const AuthProvider = ({ children }) => {
     user,
     loading,
     login,
+    staffLogin,
     register,
     logout,
     isAuthenticated: !!user,
