@@ -215,7 +215,14 @@ const Login = ({ onLogin, onSwitchToRegister, onBack }) => {
                   </button>
                 </div>
                 <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
-                  The access code is provided by your admin.
+                  Provided by your admin. &nbsp;
+                  <span style={{ color: '#d1d5db' }}>Demo:&nbsp;</span>
+                  <code style={{
+                    background: '#f3f4f6', padding: '1px 6px', borderRadius: '4px',
+                    fontSize: '11px', color: '#6b7280', letterSpacing: '0.05em',
+                  }}>
+                    STAFF-VITALAI-2024
+                  </code>
                 </p>
               </div>
             </>

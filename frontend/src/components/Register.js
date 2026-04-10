@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, User, Stethoscope } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Stethoscope } from 'lucide-react';
 import './Login.css';
 import { authAPI } from '../services/api';
 
@@ -8,7 +8,6 @@ const Register = ({ onSwitchToLogin, onBack }) => {
     email: '',
     password: '',
     confirmPassword: '',
-    userType: 'patient'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,7 +35,7 @@ const Register = ({ onSwitchToLogin, onBack }) => {
 
     setIsLoading(true);
     try {
-      await authAPI.register(formData.email, formData.password, formData.userType);
+      await authAPI.register(formData.email, formData.password, 'patient');
       setSuccess(true);
       // Auto-redirect to login after 1.5 seconds
       setTimeout(() => onSwitchToLogin?.(), 1500);
@@ -85,28 +84,6 @@ const Register = ({ onSwitchToLogin, onBack }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
-          <div className="form-group">
-            <label>User Type</label>
-            <div className="user-type-selector">
-              <button
-                type="button"
-                className={`user-type-btn ${formData.userType === 'patient' ? 'active' : ''}`}
-                onClick={() => handleInputChange('userType', 'patient')}
-              >
-                <User size={16} />
-                Patient
-              </button>
-              <button
-                type="button"
-                className={`user-type-btn ${formData.userType === 'staff' ? 'active' : ''}`}
-                onClick={() => handleInputChange('userType', 'staff')}
-              >
-                <Stethoscope size={16} />
-                Staff
-              </button>
-            </div>
-          </div>
-
           <div className="form-group">
             <label htmlFor="email">Email Address</label>
             <div className="input-wrapper">
