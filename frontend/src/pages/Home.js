@@ -1,27 +1,41 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Stethoscope, MessageCircle, Calendar, Upload, Users, Shield, ArrowLeft, LogOut } from 'lucide-react';
 import ChatInterface from '../components/ChatInterface';
 import Login from '../components/Login';
 import Register from '../components/Register';
+import { useAuth } from '../contexts/AuthContext';
 import './Home.css';
 
 const Home = () => {
   const [currentView, setCurrentView] = useState('welcome');
-  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+  const { user: authUser, logout: authLogout } = useAuth();
+
+  // Use authUser (from AuthContext/localStorage) as the source of truth
+  const user = authUser;
 
   const handleLogin = (userData) => {
-    setUser(userData);
-    setCurrentView('chat');
+    // After login, redirect to the right portal based on role
+    const role = userData?.role || 'patient';
+    if (role === 'admin') {
+      navigate('/admin');
+    } else if (role === 'staff') {
+      navigate('/staff');
+    } else {
+      // Patient — show chat inline on home
+      setCurrentView('chat');
+    }
   };
 
   const handleLogout = () => {
-    setUser(null);
+    authLogout();
     setCurrentView('welcome');
   };
 
   // ── Chat view with navigation bar ──────────────────────────────────────────
   if (currentView === 'chat') {
-    const userType = user ? user.userType : 'patient';
+    const userType = user ? (user.role || user.userType || 'patient') : 'patient';
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
         {/* Top nav bar */}

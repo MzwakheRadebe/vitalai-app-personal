@@ -577,7 +577,7 @@ def _build_response(prompt: str, severity: str, conf_pct: int = 0) -> str:
 
     return (
         f"{advice}\n\n"
-        "Is there anything else you'd like to tell me about how you're feeling, or have you noticed any other symptoms?\n\n"
+        "📋 Monitor your symptoms — if they get worse or new ones appear, describe them again and I'll reassess.\n\n"
         "⚠️ VitalAI is an AI-powered assistant. When in doubt, always consult a healthcare professional."
     )
 
