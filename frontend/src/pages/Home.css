@@ -480,16 +480,70 @@
   .hero-section {
     padding: 100px 1rem 60px;
   }
-  
+
   .hero-text h1 {
     font-size: 1.8rem;
   }
-  
+
   .cta-button {
     width: 100%;
   }
-  
+
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ── Mobile-first improvements ────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Collapse nav links on small screens */
+  .nav-links {
+    gap: 0.4rem;
+  }
+  .nav-link {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  /* Tighten header padding */
+  .header-content {
+    padding: 0.75rem 1rem;
+  }
+
+  /* Hero text smaller on phones */
+  .hero-text h1 {
+    font-size: 1.6rem;
+  }
+  .hero-text p {
+    font-size: 0.95rem;
+  }
+
+  /* Stack hero actions vertically */
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .hero-actions .cta-button {
+    text-align: center;
+  }
+
+  /* Footer: single column on phones */
+  .footer-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  .footer-col:first-child {
+    grid-column: auto;
+  }
+
+  /* Feature cards full width */
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Stats 2-col on phones */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
   }
 }

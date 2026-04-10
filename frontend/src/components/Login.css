@@ -500,8 +500,46 @@
   .switch-link {
     transition: none;
   }
-  
+
   .login-btn:hover:not(:disabled) {
     transform: none;
+  }
+}
+
+/* ── Mobile fixes ─────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 0.5rem;
+    align-items: flex-start;
+    padding-top: 1.5rem;
+  }
+
+  .login-card {
+    padding: 1.5rem 1.25rem;
+    border-radius: 16px;
+  }
+
+  .login-header h1 {
+    font-size: 1.4rem;
+  }
+
+  .user-type-selector {
+    gap: 0.5rem;
+  }
+
+  .user-type-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .login-btn {
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+  }
+
+  .form-options {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
   }
 }
